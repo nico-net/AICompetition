@@ -56,8 +56,6 @@ properties
 % of operation for the UWB Channel. The default is 'Outdoor'
     EnvironmentWpan = "Outdoor"
 
-% Line of sight checker for UWB Channel
-    Los = true
 end
 
 properties (Hidden)
@@ -123,6 +121,7 @@ methods
                     message = randi([0 1],msgLen,1);   
                     waveform = lrwpanWaveformGenerator( ...
                                 message, cfglrWpan);
+
 
                 otherwise % WLAN waveform
                     switch obj.IWN(i).SignalType
@@ -191,7 +190,7 @@ methods
                 case {'BR','EDR2M','EDR3M'}
                     bandwidth(i) = 1e6;
                 case 'IEEE 802.15.4'
-                    bandwidth(i) = 5e6;
+                    bandwidth(i) = 8e6;
                 otherwise
                     switch obj.IWN(i).SignalType
                         case {'802.11b/g with 22 MHz Bandwidth','WLANBasebandFile'}
@@ -285,60 +284,43 @@ methods
 
                 case 'IEEE 802.15.4'
                     % % Fading channel for IEEE 802.15.4 using Rayleigh or Rician
-                    % sig = iwnWaveform{i};
-                    % fs = obj.InputSampleRate;
-                    % % Select path delays and gains based on environment
-                    % switch obj.EnvironmentWpan
-                    %     case 'Indoor office'
-                    %         pathDelays   = [0 30e-9 70e-9 90e-9];    % seconds
-                    %         avgPathGains = [ 0   -1    -2    -3];      % dB
-                    %     case 'Home'
-                    %         pathDelays   = [0 20e-9 50e-9 80e-9];
-                    %         avgPathGains = [ 0   -2    -4    -6];
-                    %     case 'Industrial'
-                    %         pathDelays   = [0 40e-9 100e-9 150e-9];
-                    %         avgPathGains = [ 0   -3    -6    -9];
-                    %     case 'Outdoor'
-                    %         pathDelays   = [0 100e-9 200e-9 300e-9];
-                    %         avgPathGains = [ 0   -5   -10   -15];
-                    %     otherwise
-                    %         % default to indoor office
-                    %         pathDelays   = [0 30e-9 70e-9 90e-9];
-                    %         avgPathGains = [ 0   -1    -2    -3];
-                    % end
-                    % % Create fading channel
-                    % switch channelModel
-                    %     case 'Rician Channel'
-                    %         fadeChan = comm.RicianChannel( ...
-                    %             SampleRate=fs, PathDelays=pathDelays, ...
-                    %             AveragePathGains=avgPathGains, KFactor=6, ...
-                    %             MaximumDopplerShift=0);
-                    %     case 'Rayleigh Channel'
-                    %         fadeChan = comm.RayleighChannel( ...
-                    %             SampleRate=fs, PathDelays=pathDelays, ...
-                    %             AveragePathGains=avgPathGains, MaximumDopplerShift=0);
-                    %     otherwise
-                    %         error('Unsupported channelModel %s for IEEE 802.15.4', channelModel);
-                    % end
-                    % rxIWN{i} = fadeChan(sig);
-                    % % Apply fading
-                    % Fs = obj.InputSampleRate; % Sample rate
-                    % Fc = 5e6;                 % Cutoff frequency: 5 MHz
-                    % Fpass = Fc;               % Passband edge (−3 dB)
-                    % Fstop = Fc*1.1;           % Stopband edge
-                    % 
-                    % % Progetto del filtro Low-pass FIR
-                    % lpFilt = designfilt('lowpassfir', ...
-                    %     'PassbandFrequency',Fpass, ...
-                    %     'StopbandFrequency',Fstop, ...
-                    %     'PassbandRipple',1, ...     % 1 dB ripple max in banda passante
-                    %     'StopbandAttenuation',60, ... % 60 dB attenuazione in banda stop
-                    %     'SampleRate',Fs);
-                    % 
-                    % % Applico il filtro
-                    % rxIWNFiltered = filter(lpFilt, rxIWN{i});
-                    % rxIWN{i} = rxIWNFiltered;
-                    rxIWN{i} = iwnWaveform{i};
+                    sig = iwnWaveform{i};
+                    fs = obj.InputSampleRate;
+                    % Select path delays and gains based on environment
+                    switch obj.EnvironmentWpan
+                        case 'Indoor office'
+                            pathDelays   = [0 30e-9 70e-9 90e-9];    % seconds
+                            avgPathGains = [ 0   -1    -2    -3];      % dB
+                        case 'Home'
+                            pathDelays   = [0 20e-9 50e-9 80e-9];
+                            avgPathGains = [ 0   -2    -4    -6];
+                        case 'Industrial'
+                            pathDelays   = [0 40e-9 100e-9 150e-9];
+                            avgPathGains = [ 0   -3    -6    -9];
+                        case 'Outdoor'
+                            pathDelays   = [0 100e-9 200e-9 300e-9];
+                            avgPathGains = [ 0   -5   -10   -15];
+                        otherwise
+                            % default to indoor office
+                            pathDelays   = [0 30e-9 70e-9 90e-9];
+                            avgPathGains = [ 0   -1    -2    -3];
+                    end
+                    % Create fading channel
+                    switch channelModel
+                        case 'Rician Channel'
+                            fadeChan = comm.RicianChannel( ...
+                                SampleRate=fs, PathDelays=pathDelays, ...
+                                AveragePathGains=avgPathGains, KFactor=6, ...
+                                MaximumDopplerShift=0);
+                        case 'Rayleigh Channel'
+                            fadeChan = comm.RayleighChannel( ...
+                                SampleRate=fs, PathDelays=pathDelays, ...
+                                AveragePathGains=avgPathGains, MaximumDopplerShift=0);
+                        otherwise
+                            error('Unsupported channelModel %s for IEEE 802.15.4', channelModel);
+                    end
+                    rxIWN{i} = fadeChan(sig);
+
                 otherwise
                     distAWNRxIWNTx = sqrt(sum((obj.IWN(i).TxPosition-awnRxPosition).^2,2));
                     bw = ['CBW' num2str(obj.InputSampleRate/1e6)];
@@ -389,9 +371,29 @@ methods
        end
        % Interpolating all waveforms to a higher sampling rate based on
        % collision probability
-       [n,d] = rat(obj.OutputSampleRate/newFs);
-       firinterp = dsp.FIRRateConverter(n,d,...
-            designMultirateFIR(n,d,TWInterpolation,AstopInterpolation));
+       % [n,d] = rat(obj.OutputSampleRate/newFs);
+       % firinterp = dsp.FIRRateConverter(n,d,...
+       %      designMultirateFIR(n,d,TWInterpolation,AstopInterpolation));
+       spc = 4;                      % samples per chip ZigBee
+        zigbeeType = "IEEE 802.15.4";
+    
+        % 1) Se c'è un IWN ZigBee, risampia quell’unico waveform
+        for k = 1:obj.NumIWNNodes
+            if obj.IWN(k).SignalType == zigbeeType
+                % calcola fattore di upsampling F = InputSampleRate/(spc*2e6)
+                F = obj.InputSampleRate/(spc*2e6);
+                if F ~= 1
+                    [Pz, Qz] = rat(F);
+                    % risampia solo il cell corrispondente
+                    iwnWaveform{k} = resample(iwnWaveform{k}, Pz, Qz);
+                end
+                break;  % ce ne basta uno
+            end
+        end
+    
+        % 2) Prepara newFs in base all’oversampling (resta invariato)
+        newFs = obj.InputSampleRate * obj.IWN(1).OverSamplingFactor;
+    
         reqLen = numel(awnWaveform);
         allSig = zeros(reqLen,numSig);
         allSig(:,end) = awnWaveform;
@@ -421,6 +423,10 @@ methods
         else
             allSigTemp = allSig;
         end
+        [n,d] = rat(obj.OutputSampleRate/newFs);
+        firinterp = dsp.FIRRateConverter(n, d, ...
+            designMultirateFIR(n,d,TWInterpolation,AstopInterpolation));
+
         allSigFilt = firinterp(allSigTemp);
         iwnFreqs = [obj.IWN.Frequency];
         freqOffset = [iwnFreqs awnFrequency]-2440e6;
