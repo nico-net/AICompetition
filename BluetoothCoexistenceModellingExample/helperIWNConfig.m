@@ -55,7 +55,7 @@ properties
 % This property determines lower level configuration settings and the mode
 % of operation for the UWB Channel. The default is 'Outdoor'
     EnvironmentWpan = "Outdoor"
-
+    
 end
 
 properties (Hidden)
@@ -64,6 +64,7 @@ properties (Hidden)
 
     %Bandwidth Bandwidth of the signal in Hz
     Bandwidth
+
 end
 
 methods
@@ -91,28 +92,30 @@ methods
         for  i = 1:obj.NumIWNNodes
             switch obj.IWN(i).SignalType
                 case {'LE1M','LE2M','LE500K','LE125K'}
-                    % Derive channel index based on the center frequency
+                    % Bluetooth LE
                     channelIndexArray = [37 0:10 38 11:36 39];
                     channelIndex = channelIndexArray((obj.IWN(i).Frequency-2402e6)/2e6+1);
                     payloadLength = 255;
                     data = randi([0 1],payloadLength*8,1,'int8');
                     phyFactor = 1+strcmp(obj.IWN(i).SignalType,'LE2M');
                     sps = obj.InputSampleRate/(phyFactor*1e6);
-                    accAddress = '01234567';
-                    accessAddBits = int2bit(hex2dec(accAddress),32,false);
-                    waveform = bleWaveformGenerator(data,Mode=obj.IWN(i).SignalType,ChannelIndex=channelIndex,...
-                                  SamplesPerSymbol=sps,AccessAddress=accessAddBits);
+                    accessAddBits = int2bit(hex2dec('01234567'),32,false);
+                    waveform = bleWaveformGenerator(data, ...
+                        Mode=obj.IWN(i).SignalType, ...
+                        ChannelIndex=channelIndex, ...
+                        SamplesPerSymbol=sps, ...
+                        AccessAddress=accessAddBits);
+
                 case {'BR','EDR2M','EDR3M'}
+                    % Bluetooth BR/EDR
                     bluetoothPacket = 'FHS';
                     sps = obj.InputSampleRate/1e6;
-                    iwnWaveformConfig = bluetoothWaveformConfig(Mode=obj.IWN(i).SignalType,...
-                                  PacketType=bluetoothPacket,SamplesPerSymbol=sps);
-                    if strcmp(bluetoothPacket,'DM1')
-                        iwnWaveformConfig.PayloadLength = 17;       %#ok<UNRCH> % Maximum length of DM1 packets in bytes
-                    end
-                    dataLen = getPayloadLength(iwnWaveformConfig);  % Length of the payload
+                    cfg = bluetoothWaveformConfig(Mode=obj.IWN(i).SignalType, ...
+                                  PacketType=bluetoothPacket, ...
+                                  SamplesPerSymbol=sps);
+                    dataLen = getPayloadLength(cfg);
                     data = randi([0 1],dataLen*8,1);
-                    waveform = bluetoothWaveformGenerator(data,iwnWaveformConfig);
+                    waveform = bluetoothWaveformGenerator(data,cfg);
                 case 'IEEE 802.15.4'
                     spc = 4;
                     msgLen = 120*8; %in bits
@@ -387,7 +390,6 @@ methods
                     % risampia solo il cell corrispondente
                     iwnWaveform{k} = resample(iwnWaveform{k}, Pz, Qz);
                 end
-                break;  % ce ne basta uno
             end
         end
     
