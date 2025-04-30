@@ -108,6 +108,7 @@ methods
 
                 case {'BR','EDR2M','EDR3M'}
                     % Bluetooth BR/EDR
+                    % Change packet type eventually
                     bluetoothPacket = 'FHS';
                     sps = obj.InputSampleRate/1e6;
                     cfg = bluetoothWaveformConfig(Mode=obj.IWN(i).SignalType, ...
@@ -357,30 +358,38 @@ methods
     %
     %   AWNFREQUENCY is a scalar, representing the carrier frequency of the
     %   AWN waveform.
-       nIWN = numel(iwnWaveform);
-       nIWNC = cellfun('size',iwnWaveform,2);
-       numSig = sum(nIWNC)+1;
-       TWInterpolation = 0.01;
-       AstopInterpolation = 40;
+       nIWN = numel(iwnWaveform);   %Num of different waveforms
+       nIWNC = cellfun('size',iwnWaveform,2);  %Should be a vector with the sizes of every cell in the row 
+       numSig = sum(nIWNC)+1;                  %Num of signals + 1 apparently, the +1 is for the AWN signal, not sure how it works (maybe because double)
+       TWInterpolation = 0.01;  %Transition Band width of filter
+       AstopInterpolation = 40;  %Attenuation of Stop band filter
        % Sample rate match: Bring all waveforms to the sampling rate of the
        % highest sample rate signal
-       newFs = obj.InputSampleRate;
-       if obj.IWN(1).OverSamplingFactor ~= 1
-           newFs = obj.IWN(1).OverSamplingFactor*obj.InputSampleRate;
-           [P,Q] = rat(obj.IWN(1).OverSamplingFactor);
-           awnWaveform = resample(awnWaveform,P,Q);
-           iwnWaveform{2} = resample(iwnWaveform{2},P,Q);
+       newFs = obj.InputSampleRate;    %Takes Input Sample Rate, which is WLAN's, again, because it's the biggest i assume?
+       if obj.IWN(1).OverSamplingFactor ~= 1    %Why IWN(1)? I assume because it was designed by a retard
+           newFs = obj.IWN(1).OverSamplingFactor*obj.InputSampleRate;   %Calculating REAL SampleRate
+           [P,Q] = rat(obj.IWN(1).OverSamplingFactor);   %Still calculated on IWN(1), still assume it's for the same reason as before
+           awnWaveform = resample(awnWaveform,P,Q);         %Resamples everything to fit 80Mhz --> 
+           iwnWaveform{2} = resample(iwnWaveform{2},P,Q);   
            iwnWaveform{3} = resample(iwnWaveform{3},P,Q);
        end
+        
+
+       %At this point, we have n waveforms, all sampled at 80Mhz, but of
+       %different lengths based on the signals we had in input
+
+
+
        % Interpolating all waveforms to a higher sampling rate based on
        % collision probability
        % [n,d] = rat(obj.OutputSampleRate/newFs);
        % firinterp = dsp.FIRRateConverter(n,d,...
        %      designMultirateFIR(n,d,TWInterpolation,AstopInterpolation));
        spc = 4;                      % samples per chip ZigBee
-        zigbeeType = "IEEE 802.15.4";
+       zigbeeType = "IEEE 802.15.4";
     
-        % 1) Se c'è un IWN ZigBee, risampia quell’unico waveform
+        % 1) Se c'è un IWN ZigBee, risampla quell’unico waveform  --> Imo
+        % dovrebbe essere fatto prima
         for k = 1:obj.NumIWNNodes
             if obj.IWN(k).SignalType == zigbeeType
                 % calcola fattore di upsampling F = InputSampleRate/(spc*2e6)
@@ -396,17 +405,30 @@ methods
         % 2) Prepara newFs in base all’oversampling (resta invariato)
         newFs = obj.InputSampleRate * obj.IWN(1).OverSamplingFactor;
     
-        reqLen = numel(awnWaveform);
-        allSig = zeros(reqLen,numSig);
-        allSig(:,end) = awnWaveform;
-        sInd = 1;
+        reqLen = numel(awnWaveform);    %AWN waveform lenght (it should be size(awnWaveform, 1))
+        allSig = zeros(reqLen,numSig);  % Generates a matrix that has numSig (IWN size) column vectors filled with zeros of the size of awnWf
+        allSig(:,end) = awnWaveform;    % The last column is set to be the awn signal
+        sInd = 1;               
         for n = 1:nIWN
             if obj.IWN(n).CollisionProbability > 0 && obj.IWN(n).CollisionProbability <= 1
                 numZerosAppended = ...
-                    ceil(numel(awnWaveform)*(1-obj.IWN(n).CollisionProbability));
+                    ceil(numel(awnWaveform)*(1-obj.IWN(n).CollisionProbability));  
                 iwnWaveformTemp = [iwnWaveform{n}];
                 nS = size(iwnWaveformTemp,2);
                 iwnWaveformTemp = [zeros(numZerosAppended,nS);iwnWaveformTemp]; %#ok<*AGROW>
+                
+                %Ok here's how the collision probability works and why it's
+                %shit imo:
+                %Basically this code "shifts forward" the signals by
+                %putting a bunch of zeros at the start. This should only
+                %result in a spectrum that starts after a while right?
+                %WRONG, because the Interference gets added every Bluetooth
+                %packet, so everything gets delayed and results in a fucked
+                %up signal on the spectrum
+
+
+
+                %Fixes length of the signals to match the waveform
                 for nC = 1:nS
                     if numel(iwnWaveformTemp(:,nC)) < reqLen
                         allSig(:,sInd) = [iwnWaveformTemp(:,nC);zeros(numel(awnWaveform)-numel(iwnWaveformTemp(:,nC)),1)];
@@ -419,16 +441,21 @@ methods
                 sInd = sInd+1;
             end
         end
+
+        %Why in the actual fuck do i care if Rows * Columns is divisible
+        %for that? I should care that Rows is 
         allSigRem = rem(numel(allSig), ceil(newFs/1e6));
         if allSigRem
             allSigTemp = [allSig;zeros(ceil(newFs/1e6)-allSigRem,numSig)];
         else
             allSigTemp = allSig;
         end
+
+        %Fixes again the sample rate, but this time in relation to what it
+        %wants it to be when it goes out
         [n,d] = rat(obj.OutputSampleRate/newFs);
         firinterp = dsp.FIRRateConverter(n, d, ...
             designMultirateFIR(n,d,TWInterpolation,AstopInterpolation));
-
         allSigFilt = firinterp(allSigTemp);
         iwnFreqs = [obj.IWN.Frequency];
         freqOffset = [iwnFreqs awnFrequency]-2440e6;
@@ -436,7 +463,7 @@ methods
         if nDiff
             freqOffset = [freqOffset(1)*ones(1,nDiff+1) freqOffset(2:end)];
         end
-        % Combine the AWN and IWN waveforms
+        % Combine the AWN and IWN waveforms 
         sigcom = comm.MultibandCombiner(InputSampleRate=obj.OutputSampleRate,...
             FrequencyOffsets=freqOffset,...
             OutputSampleRateSource="Property",OutputSampleRate=obj.OutputSampleRate); 
