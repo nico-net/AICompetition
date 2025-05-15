@@ -1,0 +1,56 @@
+%% MIXING DIFFERENT SIGNALS
+% This example shows you how to model homogeneous and heterogeneous coexistence between Bluetooth® 
+% basic rate/enhanced data rate (BR/EDR), low energy (LE) , wireless local area network (WLAN)
+% and LR-WPAN (IEEE 802.15.4) waveforms.
+
+%% Simulation parameters
+% Specify the AWN parameters such as the signal type, transmitter position, 
+% transmitter power, and packet type. Receiver position is assumed to be in
+% [0,0]. 
+%Possible types of signals:
+% "LE1M"
+% "LE2M"
+% "BR"
+% "802.11ax"
+% "IEEE 802.15.4"
+
+insertParameters = "manual"; %manual or random
+sampleRate = 20e6; %in Hz
+
+if strcmp(insertParameters, "manual")
+    nSignals = 3; % number of coexisting signals
+    for i = 1:nSignals
+        rfSignals(i).SignalType = ;
+        rfSignals(i).TxPosition = ;
+        rfSignals(i).Frequency = ;
+        rfSignals(i).TxPower = ;
+        switch rfSignals(i).SignalTyp
+            case {"LE1M", "LE2M"}
+            rfSignals(i).EnableHopping = 1; % 1 = On, 0 = Off
+            rfSignals(i).FrequencyHop = bleChannelSelection;   % Bluetooth LE channel index System object™
+            
+            case "BR"
+                rfSignals(i).PacketType = ;
+                phyFactor = 1+1*(awnSignalType=="LE2M");
+                spsB = sampleRate/(1e6*phyFactor);   
+                rfSignals(i).WaveformConfig = bluetoothWaveformConfig(Mode=rfSignals(i).SignalType, ...
+                    PacketType=rf(i).PacketType, ...
+                    SamplesPerSymbol= spsB);
+
+            case "802.11ax"
+                rfSignals(i).NumTransmitAntennas = 1;
+                rfSignals(i).WlanConfig = wlanHESUConfig(ChannelBandwidth='CBW20',...
+                                NumTransmitAntennas=obj.IWN(i).NumTransmitAntennas,...
+                                NumSpaceTimeStreams=obj.IWN(i).NumTransmitAntennas);
+            case "802.15.4"
+                spc = 4;
+                msgLen = 120*8; %in bits
+                rfSignals(i).LRWPanConfig = lrwpanOQPSKConfig(Band=2450, ...
+                                PSDULength=msgLen/8, SamplesPerChip=spc);
+        end
+    end
+else
+    
+
+
+end
