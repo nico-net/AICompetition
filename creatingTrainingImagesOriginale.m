@@ -7,11 +7,15 @@
 % WLAN + BLUETOOTH = 159.3750 
 % BLUETOOTH + ZIGBEE = 191.2500 
 % BLUETOOTH + ZIGBEE + WLAN = 223.1250 
-% UNKOWN  = 255.0000  (Not
+% UNKOWN  = 255.0000  (Not labelled)
 
 
-function [imageLabelled] = creatingTrainingImages(numFrame,label, classNames, sr, imageSize)
+function creatingTrainingImages(numFrame,label, sr, imageSize)
     numberOfLabels = 9;
+    linSpace = linspace(0, 255, numberOfLabels);
+    pixelValues = containers.Map(...
+    {'WLAN', 'ZIGBEE', 'Bluetooth'}, ...
+    [linSpace(2:3), linSpace(5)]);
     %Creating directory  
     %classNames = ["Wlan", "ZigBee", "Bluetooth"];
     %imageSize = {[128, 128]};
@@ -41,19 +45,18 @@ function [imageLabelled] = creatingTrainingImages(numFrame,label, classNames, sr
        % end
 
        % Creating the spectogram
-       spectrogram = createSpectrogram(waveform, sr);
+       %spectrogram = createSpectrogram(waveform, sr);
        data_tot = [];
        %Labelling pixels
        for i = 1:length(waveforms)
            waveform = waveforms(i);
-           spectrogram = createSpectrogram(waveform, 20e6);
-           data_waveform_singular = labellingImage(spectrogram, label, numberOfLabels);
+           spectrogram = createSpectrogram(waveform, sr, imageSize);
+           data_waveform_singular = labellingImage(spectrogram, label, numberOfLabels, pixelValues);
            data_tot = [data_tot data_waveform_singular];
        end
        overlapLabelledImages(data_tot, idxFrame, dirName);
     end
-
-    end
+end
 
 
 function [P] = createSpectrogram(waveform, sr, imageSize)
@@ -83,7 +86,7 @@ function [P] = createSpectrogram(waveform, sr, imageSize)
 end
 
 
-function data = labellingImage(P_dB, label, pixelClassNames, numberOfLabels)
+function data = labellingImage(P_dB, label, pixelClassNames, numberOfLabels, pixelValues)
     % Labelling every pixel with a different gray scale colors. The matrix is
     % saved in a directory dir
     soglia = max(P_dB(:)) - 10;
@@ -96,7 +99,8 @@ function data = labellingImage(P_dB, label, pixelClassNames, numberOfLabels)
         % --- 3) Riempie l'intero rettangolo con 1 ---
         mask(rmin:rmax, cmin:cmax) = true;
         data = zeros(size(P_dB));
-        pixelValue = floor((find(strcmp(label, pixelClassNames)) - 1) * 255 / numel(pixelClassNames));
+        % Assegna il valore dalla mappa
+        pixelValue = pixelValues(label);
         data(mask) = pixelValue;
     else
         % Se è Bluetooth, riempie i singoli rettangoli dei componenti connessi
@@ -111,8 +115,8 @@ function data = labellingImage(P_dB, label, pixelClassNames, numberOfLabels)
             mask(rmin:rmax, cmin:cmax) = true;
         end
         data = zeros(size(P_dB));
-        % devo modificare pixelValue in base ai parametri
-        pixelValue = floor((find(strcmp(label, pixelClassNames)) - 1) * 255 / numberOfLabels);
+        % Assegna il valore fisso per Bluetooth
+        pixelValue = pixelValues('Bluetooth');
         data(mask) = pixelValue;
     end
     % --- 5) Convert to uint8 and resize ---
@@ -127,7 +131,6 @@ end
 
 
 function overlapLabelledImages(data, idxFrame, dir)
-
     data_final = sum(data, 3);             % Somma lungo la terza dimensione (array di matrici)
     data_final = uint8(data_final);
     filename = label + '_frame_' + num2str(idxFrame);
