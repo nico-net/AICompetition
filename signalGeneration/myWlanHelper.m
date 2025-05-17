@@ -1,5 +1,5 @@
-function wfFin = myWlanHelper(centerFreq,ChannelType)
-%UNTITLED Summary of this function goes here
+function [noisyWf, wfFin] = myWlanHelper(centerFreq,ChannelType)
+%myWlanHelper Summary of this function goes here
 %   Detailed explanation goes here
 
 sampleRate = 80e6;
@@ -46,6 +46,6 @@ wfRes = resample(wfChan, 4, 1);
 fOff.FrequencyOffset = centerFreq - ISMCenterFreq;
 wfFin = fOff(wfRes);
 release(fOff);
-wfFin = awgn(wfFin, 20);
+noisyWf = awgn(wfFin, 20);
 
 end

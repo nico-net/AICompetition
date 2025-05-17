@@ -1,4 +1,4 @@
-function finWf = myBluetoothHelper(PacketType, ChannelType)
+function [noisyWf,finWf] = myBluetoothHelper(PacketType, ChannelType)
 
 
 timeSimulation = 20e-3; %seconds
@@ -71,7 +71,7 @@ for i = 1:slotsLength:numSlots
     release(fOff);
 end   
 
-finWf = awgn(finWf, 10);
+noisyWf = awgn(finWf, 10);
 
 
 
