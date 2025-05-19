@@ -31,17 +31,24 @@ function creatingTrainingImages(numFrame,label, sr, imageSize)
     waveforms = [];
     idxFrame = 0;
     numFrame = 1;
+
     while idxFrame<numFrame
 
-        % randomize the number of signal that have to be created and save
-        % them into an array of waveforms 
-      
-       for i = 1:randi(randi(30,1),1)
-           type_signal = randi(3,1);
-           waveform = generateWaveform(type_signal);
-           waveforms  = [waveforms waveform];
-
-       end
+            % randomize the number of signal that have to be created and save
+            % them into an array of waveforms 
+          
+           numIterations = randi(randi(30,1),1);
+    
+        for i = 1:numIterations
+            % Get a number to generate signal waveform
+            type_signal = randi(3,1);
+        
+            % Save the generated waveform
+            [noisyWaveform, wfFin] = generateWaveform(type_signal);
+        
+            % Update waveform 
+            waveforms = [waveforms noisyWaveform]; % oppure usa cleanWaveform
+        end
 
 
        % Creating the spectogram
@@ -145,39 +152,42 @@ end
 % create a function who runs the script to generate waveform choosen
 % between three type of signals (1: ZigBee; 2: WLan; 3: Bluetooth)
 
-function output = generateWaveform(numOfSignal)
-    
-     % Check if the input number is actually an integer between 1 and 3
-     if ~isscalar(numOfSignal) || ~isnumeric(numOfSignal) || floor(numOfSignal) ~= numOfSignal
+function [noisyWf, wfFin] = generateWaveform(numOfSignal)
+
+    % check that the integer is included in the range 1:3
+    if ~isscalar(numOfSignal) || ~isnumeric(numOfSignal) || floor(numOfSignal) ~= numOfSignal
         error('L''input deve essere un numero intero');
-     end
-
-     if numOfSignal < 1 || numOfSignal > 3
+    end
+    if numOfSignal < 1 || numOfSignal > 3
         error('L''input deve essere un numero intero compreso tra 1 e 3');
-     end
-    
-    % create script file name to run
-    if(numOfSignal==1)
-        script_name = sprintf('myZigBEEHelper');
     end
     
-    if(numOfSignal==2)
-        script_name = sprintf('myWlanHelper');
+    % Call the corrisponding function to generate the signal
+    switch numOfSignal
+        case 1
+            spc = 4;                % SamplesPerChip
+            numPackets = randi(4);  % NumOfPackets choosen randlomly
+            centerFreq = 2405e6 + 5e6 * (randi(16) - 11); % CenterFrequency choosen randlomly
+            channelTypes = {'Rician', 'Rayleigh', 'AWGN'};
+            channelType = channelTypes{randi(length(channelTypes))}; % ChannelType choosen randlomly
+            disp(channelType);
+            [noisyWf, wfFin] = myZigbEEHelper(spc, numPackets, centerFreq, channelType);
+            
+        case 2
+            centerFreq = [2412e6, 2437e6, 2462e6];
+            choosenCF = randsample(centerFreq, 1);
+            disp(choosenCF)
+            channelTypes = {'Rician', 'Rayleigh'};
+            channelType = channelTypes{randi(length(channelTypes))}; % ChannelType choosen randlomly
+            [noisyWf, wfFin] = myWlanHelper(choosenCF, channelType);
+            
+        case 3
+            channelTypes = {'Rician', 'Rayleigh'};
+            channelType = channelTypes{randi(length(channelTypes))}; % ChannelType choosen randlomly
+            % packet_type = (how_To_Choose_Packet ?) - I have to find 
+            [noisyWf, wfFin] = myBluetoothHelper(PacketType,channelType);
     end
 
-    if(numOfSignal==3)
-        script_name = sprintf('myBluetoothHelper');
-    end
-
-    %check that the choosen file already exist in the current
-    %directory/folder
-
-    if exist([script_name '.m'], 'file') ~= 2
-        error('The file doesnt exist in the current folder');
-    end
-
-    %run the choosen script
-
-    output = run(script_name);
+    clear {choosenCF, channelType, centerFreq}; % clear variables to avoid error in the randomic choice of the parameters
 
 end
