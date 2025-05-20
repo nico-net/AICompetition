@@ -35,17 +35,14 @@ function creatingTrainingImages(numFrame,label, sr, imageSize)
     while idxFrame<numFrame
 
             % randomize the number of signal that have to be created and save
-            % them into an array of waveforms 
-          
-           numIterations = randi(randi(30,1),1);
+            % them into an array of waveforms
+            numIterations = randi(randi(1,1),1);
     
         for i = 1:numIterations
             % Get a number to generate signal waveform
             type_signal = randi(3,1);
-        
             % Save the generated waveform
             [noisyWaveform, wfFin] = generateWaveform(type_signal);
-        
             % Update waveform 
             waveforms = [waveforms noisyWaveform]; % oppure usa cleanWaveform
         end
@@ -167,6 +164,7 @@ function [noisyWf, wfFin] = generateWaveform(numOfSignal)
         case 1
             spc = 4;                % SamplesPerChip
             numPackets = randi(4);  % NumOfPackets choosen randlomly
+            disp(numPackets)
             centerFreq = 2405e6 + 5e6 * (randi(16) - 11); % CenterFrequency choosen randlomly
             channelTypes = {'Rician', 'Rayleigh', 'AWGN'};
             channelType = channelTypes{randi(length(channelTypes))}; % ChannelType choosen randlomly
@@ -184,8 +182,8 @@ function [noisyWf, wfFin] = generateWaveform(numOfSignal)
         case 3
             channelTypes = {'Rician', 'Rayleigh'};
             channelType = channelTypes{randi(length(channelTypes))}; % ChannelType choosen randlomly
-            % packet_type = (how_To_Choose_Packet ?) - I have to find 
-            [noisyWf, wfFin] = myBluetoothHelper(PacketType,channelType);
+            packetType = 'FHS';
+            [noisyWf, wfFin] = myBluetoothHelper(packetType,channelType);
     end
 
     clear {choosenCF, channelType, centerFreq}; % clear variables to avoid error in the randomic choice of the parameters
