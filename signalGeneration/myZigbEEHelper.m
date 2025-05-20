@@ -45,11 +45,16 @@ end
 %Cut last IdleTime
 wfChan = wfChan(1:end - floor(zbCfg.SampleRate * idleTime));
 
+
 if (length(wfChan) < zbCfg.SampleRate * timeDuration)
     zerosToAdd = zbCfg.SampleRate * timeDuration - length(wfChan);
     zerosBefore = floor(rand * zerosToAdd);
     zerosAfter = zerosToAdd - zerosBefore;
     wfChan = [zeros(zerosBefore, 1); wfChan; zeros(zerosAfter, 1)];
+else 
+    wfChan = wfChan(1: zbCfg.SampleRate * timeDuration);
+    zerosAfter = 0;
+    zerosBefore = 0;
 end
 
 

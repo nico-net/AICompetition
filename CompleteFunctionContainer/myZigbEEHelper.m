@@ -19,8 +19,8 @@ switch numPackets
     case {2 3}
         idleTime = 0.0005 + (0.005 - 0.0005) * rand;
     case 4
-        minVal = 0.02 - packetTimeDuration * 4;
-        maxVal = 0.02 - packetTimeDuration * 3;
+        minVal = (0.02 - packetTimeDuration * 4)/4;
+        maxVal = (0.02 - packetTimeDuration * 4)/3;
         idleTime = minVal + (maxVal - minVal) * rand;
 end
 
@@ -50,6 +50,10 @@ if (length(wfChan) < zbCfg.SampleRate * timeDuration)
     zerosBefore = floor(rand * zerosToAdd);
     zerosAfter = zerosToAdd - zerosBefore;
     wfChan = [zeros(zerosBefore, 1); wfChan; zeros(zerosAfter, 1)];
+else 
+    wfChan = wfChan(1: zbCfg.SampleRate * timeDuration);
+    zerosAfter = 0;
+    zerosBefore = 0;
 end
 
 

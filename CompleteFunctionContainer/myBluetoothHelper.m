@@ -3,7 +3,6 @@ function [noisyWf,finWf] = myBluetoothHelper(PacketType, ChannelType)
 
 timeSimulation = 20e-3; %seconds
 slotDuration = 625e-6; %seconds
-txCenterFreq = 2441e6;
 
 
 cfgBt = bluetoothWaveformConfig;
@@ -12,8 +11,7 @@ cfgBt.PacketType = PacketType;
 cfgBt.SamplesPerSymbol = 20;
 %cfgBt.DeviceAddress = generateBTAddress;
 
-cfgBt.PayloadLength = 18; %TODO: Get packetLength and decide slots length
-slotsLength = 1; %TODO: Get slotlength
+[cfgBt.PayloadLength, slotsLength] = myBtPacketFinder(PacketType);
 
 symbolRate = 1e6;
 sampleRate = symbolRate * cfgBt.SamplesPerSymbol;
@@ -75,5 +73,86 @@ noisyWf = awgn(finWf, 10);
 
 
 
+    function [payLoadLen, slotNum] = myBtPacketFinder(packetType)
+
+    switch packetType
+        case 'FHS' 
+            payLoadLen = 18;
+            slotNum = 1;    
+        case 'DM1'
+            payLoadLen = 17;
+            slotNum = 1; 
+        case 'DH1'
+            payLoadLen = 27;
+            slotNum = 1; 
+        case 'DM3' 
+            payLoadLen = 121;
+            slotNum = 3;
+        case 'DH3'
+            payLoadLen = 183;
+            slotNum = 3;
+        case 'DM5'
+            payLoadLen = 224;
+            slotNum = 5;
+        case 'DH5'
+            payLoadLen = 339;
+            slotNum = 5;
+        case '2-DH1' 
+            payLoadLen = 54;
+            slotNum = 1; 
+        case '2-DH3'
+            payLoadLen = 367;
+            slotNum = 3;
+        case '2-DH5'
+            payLoadLen = 679;
+            slotNum = 5;
+        case '3-DH1'
+            payLoadLen = 83;
+            slotNum = 1; 
+        case '3-DH3'
+            payLoadLen = 552;
+            slotNum = 3;
+        case '3-DH5'
+            payLoadLen = 1021;
+            slotNum = 5;
+        case 'HV1'
+            payLoadLen = 10;
+            slotNum = 1; 
+        case 'HV2'
+            payLoadLen = 20;
+            slotNum = 1; 
+        case 'HV3'
+            payLoadLen = 30;
+            slotNum = 1; 
+        case 'DV'
+            payLoadLen = 19;
+            slotNum = 1; 
+        case 'EV3'
+            payLoadLen = 30;
+            slotNum = 1; 
+        case 'EV4'
+            payLoadLen = 120;
+            slotNum = 3;
+        case 'EV5'
+            payLoadLen = 180;
+            slotNum = 3;
+        case '2-EV3'
+            payLoadLen = 60;
+            slotNum = 1; 
+        case '2-EV5'
+            payLoadLen = 360;
+            slotNum = 3;
+        case '3-EV3'
+            payLoadLen = 90;
+            slotNum = 1; 
+        case '3-EV5'
+            payLoadLen = 540;
+            slotNum = 3;
+        otherwise
+            payLoadLen = 18;
+            slotNum = 1;
+    end
+
+end
 
 end
