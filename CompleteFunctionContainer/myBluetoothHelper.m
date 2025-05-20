@@ -40,7 +40,7 @@ switch ChannelType
         chan.SampleRate = sampleRate;
     case 'Rayleigh'
         chan = comm.RayleighChannel;
-        chan.SammpleRate = sampleRate;
+        chan.SampleRate = sampleRate;
     otherwise
 end
 

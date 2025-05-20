@@ -9,8 +9,8 @@
 % BLUETOOTH + ZIGBEE + WLAN = 223.1250 
 % UNKOWN  = 255.0000  (Not labelled)
 
+
 function creatingTrainingImages(numFrame,label, sr, imageSize)
-    close all
     numberOfLabels = 9;
     sr = 20e6;
     linSpace = linspace(0, 255, numberOfLabels);
@@ -29,25 +29,31 @@ function creatingTrainingImages(numFrame,label, sr, imageSize)
         end
     end
     
-    
+    waveforms = [];
     idxFrame = 0;
     numFrame = 10;
 
     while idxFrame<numFrame
+
         % randomize the number of signal that have to be created and save
         % them into an array of waveforms
+        numIterations = randi(randi(1),1);
         idxFrame = idxFrame + 1;
-        waveforms = [];
-        %numSignals = randi(3);
-        numSignals = randi(1);
-        for iter = 1:numSignals
-            % Get a number to generate signal waveform
-            type_signal = randi(3);
-            % Save the generated waveform
-            [noisyWaveform, ~, label] = generateWaveform(type_signal);
-            % Update waveform 
-            waveforms = [waveforms noisyWaveform]; % oppure usa cleanWaveform
+
+        for i = 1:numIterations
+            %numSignals = randi(3);
+            numSignals = randi(1);
+            for iter = 1:numSignals
+                % Get a number to generate signal waveform
+                type_signal = randi(3,1);
+                % Save the generated waveform
+                [noisyWaveform, wfFin, label] = generateWaveform(type_signal);
+                % Update waveform 
+                waveforms = [waveforms noisyWaveform]; % oppure usa cleanWaveform
+            end
+        pause(10);
         end
+
 
        % Creating the spectogram
        %spectrogram = createSpectrogram(waveform, sr);
@@ -61,8 +67,6 @@ function creatingTrainingImages(numFrame,label, sr, imageSize)
            data_tot = [data_tot data_waveform_singular];
        end
        overlapLabelledImages(data_tot, idxFrame, dirName, label);
-       pause(8);
-       close all
     end
 end
 
@@ -96,22 +100,22 @@ end
 function data = labellingImage(P_dB, label, pixelValues, imageSize)
     % Labelling every pixel with a different gray scale colors. The matrix is
     % saved in a directory dir
-    soglia = max(P_dB(:)) - 13;
+    soglia = max(P_dB(:)) - 10;
     mask = P_dB >= soglia;
     mask = flipud(mask);
 
-    %if strcmp(label, "WLAN")
-        % [r, c] = find(mask); % Indici delle righe e colonne dove mask==true
-        % rmin = min(r); rmax = max(r); % Limiti superiore e inferiore
-        % cmin = min(c); cmax = max(c); % Limiti sinistro e destro
-        % % --- 3) Riempie l'intero rettangolo con 1 ---
-        % mask(rmin:rmax, cmin:cmax) = true;
-        % data = zeros(size(P_dB));
-        % % Assegna il valore fisso per WLAN
-        % pixelValue = pixelValues('WLAN')
-        % 
-        % data(mask) = pixelValue;
-    %else
+    if strcmp(label, "WLAN")
+        [r, c] = find(mask); % Indici delle righe e colonne dove mask==true
+        rmin = min(r); rmax = max(r); % Limiti superiore e inferiore
+        cmin = min(c); cmax = max(c); % Limiti sinistro e destro
+        % --- 3) Riempie l'intero rettangolo con 1 ---
+        mask(rmin:rmax, cmin:cmax) = true;
+        data = zeros(size(P_dB));
+        % Assegna il valore fisso per WLAN
+        pixelValue = pixelValues('WLAN')
+        
+        data(mask) = pixelValue;
+    else
         % Se è Bluetooth, riempie i singoli rettangoli dei componenti connessi
         cc = bwconncomp(mask); % Trova componenti connessi
         for i = 1:cc.NumObjects
@@ -126,9 +130,9 @@ function data = labellingImage(P_dB, label, pixelValues, imageSize)
         data = zeros(size(P_dB));
         
         % Assegna il valore dalla mappa
-        pixelValue = pixelValues(label)
+        pixelValue = pixelValues(label);
         data(mask) = pixelValue;
-    %end
+    end
     % --- 5) Convert to uint8 and resize ---
     im = imresize(im2uint8(rescale(data)), imageSize, "nearest");
     % --- 6) Display ---
