@@ -1,41 +1,43 @@
-% Number of labels = 9
-% AWGN = 0   
-% WLAN = 31.8750   
-% ZIGBEE = 63.7500  
-% WLAN + ZIGBEE = 95.6250 
-% BLUETOOTH = 127.5000 
-% WLAN + BLUETOOTH = 159.3750 
-% BLUETOOTH + ZIGBEE = 191.2500 
-% BLUETOOTH + ZIGBEE + WLAN = 223.1250 
-% UNKNOWN = 255.0000  (Not labelled)
+
+% Label encoding (grayscale values for image masks):
+% 0   = AWGN
+% 31.8750 = WLAN
+% 63.7500 = ZigBee
+% 95.6250 = WLAN + ZigBee
+% 127.5000 = Bluetooth
+% 159.3750 = WLAN + Bluetooth
+% 191.2500 = Bluetooth + ZigBee
+% 223.1250 = WLAN + ZigBee + Bluetooth
+% 255.0000 = UNKNOWN (unlabeled)
 
 function creatingTrainingImages(numFrame, label, sr, imageSize)
 % CREATINGTRAININGIMAGES Generates and saves labeled spectrogram images for training.
 %
-%   CREATINGTRAININGIMAGES(numFrame, label, sr, imageSize) generates
-%   'numFrame' number of spectrogram images for the specified 'label'
-%   (e.g., 'WLAN', 'ZigBee', 'Bluetooth') using the sampling rate 'sr' and
-%   image dimensions specified in 'imageSize'. The images are saved in the
-%   'trainingImages' directory.
+%   creatingTrainingImages(numFrame, label, sr, imageSize) generates
+%   'numFrame' labeled spectrogram images for the given signal label (e.g., 'WLAN', 
+%   'ZigBee', 'Bluetooth') using a given sampling rate 'sr' and desired image 
+%   dimensions 'imageSize'. The images and their label masks are saved into 
+%   subfolders under 'trainingImages'.
 %
 %   Inputs:
-%       numFrame  - (integer) Number of frames/images to generate.
-%       label     - (string)  Label of the signal type.
+%       numFrame  - (integer) Number of images (frames) to generate.
+%       label     - (string)  Label of the signal class to generate.
 %       sr        - (double)  Sampling rate in Hz.
-%       imageSize - (cell)    Cell array specifying image dimensions, e.g., {[1024, 1024]}.
+%       imageSize - (cell)    Cell array with image size, e.g., {[1024, 1024]}.
 %
-%   Outputs:
-%       None. The function saves the generated images to disk.
+%   Output:
+%       None. The function saves image files to disk.
 
+    close all
     numberOfLabels = 9;
     sr = 20e6;
     imageSize = {[1024, 1024]};
     linSpace = linspace(0, 255, numberOfLabels);
     pixelValues = containers.Map(...
         {'WLAN', 'ZigBee', 'Bluetooth'}, ...
-        [linSpace(2), linSpace(3), linSpace(5)]);
-    
-    % Create output directories based on image sizes
+        [linSpace(2), linSpace(3), linSpace(5)]);  % Assign pixel values per label
+
+    % Create output directories for each image size
     for index = 1:length(imageSize)
         imgSize = imageSize{index};
         folderName = sprintf('%dx%d', imgSize(1), imgSize(2));
@@ -46,99 +48,112 @@ function creatingTrainingImages(numFrame, label, sr, imageSize)
     end
     
     idxFrame = 0;
-    numFrame = 1;
+    numFrame = 1;  % Override for test/debug
 
-    pesi = [0.6 0.3 0.1];    
-    valori = [1 2 3];
+    % Class mixture probabilities: more likely to have 1 signal
+    weights = [0.6 0.3 0.1];    
+    possibleCombinations = [1 2 3];
 
     while idxFrame < numFrame
         idxFrame = idxFrame + 1;
         waveforms = [];
 
-        % Generate a random number of signals to superimpose (here fixed to 1)
-        
-        numSignals = randsample(valori, 1, true, pesi);
-     
+        % Randomly select how many signals to mix (1, 2, or 3)
+        numSignals = randsample(possibleCombinations, 1, true, weights);
         labels = [];
+
+        % Generate synthetic signals
         for iter = 1:numSignals
-            type_signal = randi(3);
+            type_signal = randi(3);  % 1=ZigBee, 2=WLAN, 3=Bluetooth
             [noisyWaveform, ~, label] = generateWaveform(type_signal);
-            labels = cat(1,labels, label)
-            waveforms = [waveforms noisyWaveform];
+            labels = cat(1, labels, label);
+            waveforms = cat(2, waveforms, noisyWaveform);
         end
 
-        % Generate labeled spectrograms
         data_tot = [];
 
+        % Generate labeled spectrogram masks
         for i = 1:size(waveforms, 2)
             label = labels(i, :);
             waveform = waveforms(:, i);
-            [spectrogram,~]= createSpectrogram(waveform, sr, imageSize);
-            data_waveform_singular = labellingImage(spectrogram, label, pixelValues, imageSize{1});
-            data_tot = cat(3, data_tot, data_waveform_singular);
+            [spectrogram, ~] = createSpectrogram(waveform, sr, imageSize);
+            labeledImage = labellingImage(spectrogram, label, pixelValues, imageSize{1});
+            data_tot = cat(3, data_tot, labeledImage);
         end
+
+        % Mix signals and create final spectrogram
         mixedSignal = mySignalMixer(waveforms);
+        mixedSignal = scalingPower(mixedSignal);
         [~, spectrogramTot] = createSpectrogram(mixedSignal, sr, imageSize);
+
+        % Save the final spectrogram and mask
         overlapLabelledImages(data_tot, idxFrame, dirName, labels, spectrogramTot);
-        pause(5);
-        close all
     end
 end
 
 
+
 function [P, I] = createSpectrogram(waveform, sr, imageSize)
-% CREATESPECTROGRAM Generates a spectrogram from a waveform.
+% CREATESPECTROGRAM Computes the spectrogram of a waveform and returns it as an image.
 %
-%   P = CREATESPECTROGRAM(waveform, sr, imageSize) computes the spectrogram
-%   of the input 'waveform' using the sampling rate 'sr' and resizes it to
-%   'imageSize'.
+%   [P, I] = createSpectrogram(waveform, sr, imageSize) returns both the numeric
+%   spectrogram matrix and its RGB image form. The result is resized to match
+%   the provided image dimensions.
 %
 %   Inputs:
-%       waveform  - (vector) Time-domain signal.
+%       waveform  - (vector) Time-domain signal waveform.
 %       sr        - (double) Sampling rate in Hz.
-%       imageSize - (cell)   Cell array specifying image dimensions, e.g., {[1024, 1024]}.
+%       imageSize - (cell)   Cell array specifying target image size.
 %
 %   Outputs:
-%       P - (matrix) Spectrogram in dB scale.
+%       P - (matrix) Spectrogram matrix in dB scale.
+%       I - (image)  RGB image representation of the spectrogram.
 
+    min_dB = -100;
+    max_dB = -30;
     Nfft = 4096;
     window = hann(256);
     overlap = 10;
+    colormap_resolution = 256;
 
     [~, ~, ~, P] = spectrogram(waveform, window, overlap, Nfft, sr, 'centered', 'psd');
 
-    P = 10 * log10(abs(P') + eps);
+    P = 10 * log10(abs(P') + eps);  % dB conversion
+    P_clipped = max(min(P, max_dB), min_dB);  % Clip dynamic range
 
-    im = imresize(im2uint8(rescale(P)), imageSize{1}, "nearest");
-    I = im2uint8(flipud(ind2rgb(im, parula(256))));
+    % Normalize to [1, 256] for color mapping
+    P_idx = round(1 + (P_clipped - min_dB) / (max_dB - min_dB) * (colormap_resolution - 1));
+    P_idx = max(min(P_idx, colormap_resolution), 1);
 
-    imshow(I);
+    im = imresize(im2uint8(rescale(P_idx)), imageSize{1}, "nearest");
+    I = im2uint8(flipud(ind2rgb(im, parula(colormap_resolution))));  % RGB flip
+
+    imshow(I);  % For debug
 end
 
 
 function data = labellingImage(P_dB, label, pixelValues, imageSize)
-% LABELLINGIMAGE Labels regions in a spectrogram corresponding to a signal.
+% LABELLINGIMAGE Generates a binary mask for a given signal in the spectrogram.
 %
-%   data = LABELLINGIMAGE(P_dB, label, pixelValues, imageSize) identifies
-%   regions in the spectrogram 'P_dB' that correspond to the specified
-%   'label' and assigns pixel values based on 'pixelValues'. The result is
-%   resized to 'imageSize'.
+%   data = labellingImage(P_dB, label, pixelValues, imageSize) thresholds the
+%   spectrogram to locate the signal and fills the bounding box. It then 
+%   labels the region with the corresponding intensity value for the signal type.
 %
 %   Inputs:
-%       P_dB        - (matrix) Spectrogram in dB scale.
-%       label       - (string) Label of the signal type.
-%       pixelValues - (Map)    Mapping of labels to pixel intensity values.
-%       imageSize   - (vector) Desired image size, e.g., [1024, 1024].
+%       P_dB        - (matrix) Spectrogram (dB scale).
+%       label       - (string) Signal label ('ZigBee', 'WLAN', etc.).
+%       pixelValues - (Map)    Mapping from label names to pixel values.
+%       imageSize   - (vector) Size of the output mask image.
 %
-%   Outputs:
-%       data - (matrix) Labeled image matrix.
+%   Output:
+%       data - (matrix) Binary mask with labeled regions.
 
-    % Thresholding and bounding-box filling
     threshold = max(P_dB(:)) - 13;
     mask = P_dB >= threshold;
-    mask = flipud(mask);
-    cc = bwconncomp(mask);
+    mask = flipud(mask);  % Align with spectrogram
+    cc = bwconncomp(mask);  % Find connected regions
 
+    % Fill bounding boxes around each component
     for i = 1:cc.NumObjects
         [r, c] = ind2sub(size(mask), cc.PixelIdxList{i});
         rmin = min(r); rmax = max(r);
@@ -154,60 +169,53 @@ function data = labellingImage(P_dB, label, pixelValues, imageSize)
 
     figure;
     imshow(im);
-    title('Spectogram Mask');
+    title('Spectrogram Mask');
 end
 
 
-function overlapLabelledImages(data, idxFrame, dir, labels, spectogram)
-% OVERLAPLABELLEDIMAGES Combines labeled images and saves the result.
+function overlapLabelledImages(data, idxFrame, dir, labels, spectrogram)
+% OVERLAPLABELLEDIMAGES Merges multiple labeled masks and saves the result.
 %
-%   OVERLAPLABELLEDIMAGES(data, idxFrame, dir, label) sums the labeled
-%   images in 'data' to create a composite image and saves it in the
-%   specified directory 'dir' with a filename based on 'label' and
-%   'idxFrame'.
+%   overlapLabelledImages(data, idxFrame, dir, labels, spectrogram) sums
+%   multiple label masks and stores the output as both .mat and .png files.
 %
 %   Inputs:
-%       data     - (3D matrix) Stack of labeled images.
-%       idxFrame - (integer)   Frame index number.
-%       dir      - (string)    Directory path to save the image.
-%       label    - (string)    Label of the signal type.
+%       data       - (3D matrix) Stack of individual binary label masks.
+%       idxFrame   - (integer)   Index of the current image frame.
+%       dir        - (string)    Path to the output directory.
+%       labels     - (cell)      Cell array of string labels used.
+%       spectrogram - (image)    Final spectrogram image to be saved.
 %
 %   Outputs:
-%       None. The function saves the composite image to disk.
+%       None. Files are saved on disk.
 
     data_final = sum(data, 3);
     data_final = uint8(data_final);
 
     label = strjoin(labels', '+');
-    filename =label + '_frame_' + num2str(idxFrame);
+    filename = label + '_frame_' + num2str(idxFrame);
     fname = fullfile(dir, filename);
-    fnameLabels = fname + ".mat";
+    save(char(fname + ".mat"), 'data_final');
 
-    save(char(fnameLabels), 'data_final');
-
-    filename_spect = filename + "_spectogram.png";
-    fname = fullfile(dir, filename_spect);
-    imwrite(spectogram, fname);
-
+    imwrite(spectrogram, char(fname + "_spectogram.png"));
 end
 
 
 function [noisyWf, wfFin, label] = generateWaveform(numOfSignal)
-% GENERATEWAVEFORM Generates a synthetic waveform for a specified signal type.
+% GENERATEWAVEFORM Creates synthetic waveforms for one of the three signal types.
 %
-%   [noisyWf, wfFin, label] = GENERATEWAVEFORM(numOfSignal) generates a
-%   waveform corresponding to the signal type specified by 'numOfSignal':
-%       1 - ZigBee
-%       2 - WLAN
-%       3 - Bluetooth
+%   [noisyWf, wfFin, label] = generateWaveform(numOfSignal) generates a noisy
+%   and clean version of a ZigBee, WLAN, or Bluetooth signal, with a randomly
+%   selected center frequency and channel model.
 %
-%   Inputs:
-%       numOfSignal - (integer) Signal type identifier (1 to 3).
+%   Input:
+%       numOfSignal - (integer) One of [1, 2, 3], representing:
+%                      1 = ZigBee, 2 = WLAN, 3 = Bluetooth
 %
-%   Outputs:
-%       noisyWf - (vector) Generated waveform with noise.
-%       wfFin   - (vector) Clean (noise-free) waveform.
-%       label   - (string) Label of the signal type.
+%   Output:
+%       noisyWf - (vector) Signal with noise added.
+%       wfFin   - (vector) Clean signal (without noise).
+%       label   - (string) Type of signal generated.
 
     if ~isscalar(numOfSignal) || ~isnumeric(numOfSignal) || floor(numOfSignal) ~= numOfSignal
         error('Input must be an integer.');
@@ -217,26 +225,23 @@ function [noisyWf, wfFin, label] = generateWaveform(numOfSignal)
     end
 
     switch numOfSignal
-        case 1
+        case 1  % ZigBee
             spc = 4;
             numPackets = randi(3);
             centerFreq = 2405e6 + 5e6 * (randi(16) - 11);
-            channelTypes = {'Rician', 'Rayleigh', 'AWGN'};
-            channelType = channelTypes{randi(length(channelTypes))};
+            channelType = randsample({'Rician', 'Rayleigh', 'AWGN'}, 1);
             [noisyWf, wfFin] = myZigbEEHelper(spc, numPackets, centerFreq, channelType);
             label = "ZigBee";
 
-        case 2
+        case 2  % WLAN
             centerFreq = [2412e6, 2437e6, 2462e6];
             choosenCF = randsample(centerFreq, 1);
-            channelTypes = {'Rician', 'Rayleigh'};
-            channelType = channelTypes{randi(length(channelTypes))};
+            channelType = randsample({'Rician', 'Rayleigh'}, 1);
             [noisyWf, wfFin] = myWlanHelper(choosenCF, channelType);
             label = "WLAN";
 
-        case 3
-            channelTypes = {'Rician', 'Rayleigh'};
-            channelType = channelTypes{randi(length(channelTypes))};
+        case 3  % Bluetooth
+            channelType = randsample({'Rician', 'Rayleigh'}, 1);
             packetType = 'FHS';
             [noisyWf, wfFin] = myBluetoothHelper(packetType, channelType);
             label = "Bluetooth";
