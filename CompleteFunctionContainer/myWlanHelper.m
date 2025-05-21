@@ -25,7 +25,6 @@ numPackets = timeSpan/(packetDuration+idleTime);
 wf = wlanWaveformGenerator(randi([0 1], wlanCfg.getPSDULength*octetLength, 1), wlanCfg, ...
     "NumPackets", numPackets, "IdleTime", idleTime);
 
-wf = scalingPower(wf);
 
 switch ChannelType
     case 'Rician'

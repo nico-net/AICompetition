@@ -28,7 +28,6 @@ end
 
 wf = lrwpanWaveformGenerator(randi([0 1], zbCfg.PSDULength*8, 1),zbCfg, "NumPackets", numPackets, "IdleTime", idleTime);
 
-wf = scalingPower(wf);
 
 switch ChannelType
     case 'Rician'

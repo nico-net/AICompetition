@@ -5,7 +5,7 @@ function txWaveform = scalingPower(waveform)
 %   Outputs:
 %      txWaveform - (column vector) Attenuated signal
 
-    desiredTxPower_dBm = randi([5, 15])
+    desiredTxPower_dBm = randi([10, 20]);
     scaling_factor = 10^(-desiredTxPower_dBm / 20);
     txWaveform = scaling_factor * waveform;
 

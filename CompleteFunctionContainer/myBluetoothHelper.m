@@ -49,7 +49,7 @@ end
 for i = 1:slotsLength:numSlots
     dataBits = randi([0 1], cfgBt.PayloadLength * octetLength, 1);
     wf = bluetoothWaveformGenerator(dataBits, cfgBt);
-    wf = scalingPower(wf);
+    
     switch ChannelType
         case 'Rician'
             wfChan = chan(wf);
