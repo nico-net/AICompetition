@@ -28,6 +28,7 @@ end
 
 wf = lrwpanWaveformGenerator(randi([0 1], zbCfg.PSDULength*8, 1),zbCfg, "NumPackets", numPackets, "IdleTime", idleTime);
 
+
 switch ChannelType
     case 'Rician'
         chan = comm.RicianChannel;

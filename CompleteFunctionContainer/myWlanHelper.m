@@ -25,11 +25,11 @@ numPackets = timeSpan/(packetDuration+idleTime);
 wf = wlanWaveformGenerator(randi([0 1], wlanCfg.getPSDULength*octetLength, 1), wlanCfg, ...
     "NumPackets", numPackets, "IdleTime", idleTime);
 
+
 switch ChannelType
     case 'Rician'
         chan = comm.RicianChannel;
         chan.SampleRate = sampleRate;
-        
         wfChan = chan(wf);
     case 'Rayleigh'
         chan = comm.RayleighChannel;
