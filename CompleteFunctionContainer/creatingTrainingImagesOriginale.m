@@ -1,14 +1,27 @@
+% =============================================
+%  Signal Combination → Linear Label Mapping (17 levels)
+% =============================================
+%
+%  Bitmask | Signal Combination                     | Label
+%  --------+----------------------------------------+--------
+%    0     | AWGN                                   | 0
+%    1     | WLAN                                   | 16
+%    2     | Bluetooth                              | 32
+%    3     | WLAN + Bluetooth                       | 48
+%    4     | ZigBee                                 | 64
+%    5     | WLAN + ZigBee                          | 80
+%    6     | Bluetooth + ZigBee                     | 96
+%    7     | WLAN + Bluetooth + ZigBee              | 112
+%    8     | SmartBAN                               | 128
+%    9     | WLAN + SmartBAN                        | 144
+%   10     | Bluetooth + SmartBAN                   | 160
+%   11     | WLAN + Bluetooth + SmartBAN            | 176
+%   12     | ZigBee + SmartBAN                      | 192
+%   13     | WLAN + ZigBee + SmartBAN               | 208
+%   14     | Bluetooth + ZigBee + SmartBAN          | 224
+%   15     | WLAN + Bluetooth + ZigBee + SmartBAN   | 240
+%   ---    | Unknown                                | 255
 
-% Label encoding (grayscale values for image masks):
-% 0   = AWGN
-% 31.8750 = WLAN
-% 63.7500 = ZigBee
-% 95.6250 = WLAN + ZigBee
-% 127.5000 = Bluetooth
-% 159.3750 = WLAN + Bluetooth
-% 191.2500 = Bluetooth + ZigBee
-% 223.1250 = WLAN + ZigBee + Bluetooth
-% 255.0000 = UNKNOWN (unlabeled)
 
 function creatingTrainingImages(numFrame, label, sr, imageSize)
 % CREATINGTRAININGIMAGES Generates and saves labeled spectrogram images for training.
@@ -29,13 +42,13 @@ function creatingTrainingImages(numFrame, label, sr, imageSize)
 %       None. The function saves image files to disk.
 
     close all
-    numberOfLabels = 9;
+    numberOfLabels = 17;
     sr = 20e6;
     imageSize = {[1024, 1024]};
-    linSpace = linspace(0, 255, numberOfLabels);
+    linSpace = linspace(0,256, numberOfLabels);
     pixelValues = containers.Map(...
-        {'WLAN', 'ZigBee', 'Bluetooth'}, ...
-        [linSpace(2), linSpace(3), linSpace(5)]);  % Assign pixel values per label
+        {'WLAN', 'ZigBee', 'Bluetooth', 'SmartBAN'}, ...
+        [linSpace(2), linSpace(3), linSpace(5), linSpace(9)]);  % Assign pixel values per label
 
     % Create output directories for each image size
     for index = 1:length(imageSize)
@@ -51,20 +64,23 @@ function creatingTrainingImages(numFrame, label, sr, imageSize)
     numFrame = 1;  % Override for test/debug
 
     % Class mixture probabilities: more likely to have 1 signal
-    weights = [0.6 0.3 0.1];    
-    possibleCombinations = [1 2 3];
+    weights = [0.4 0.3 0.2 0.1];    
+    possibleCombinations = [1 2 3 4];
 
     while idxFrame < numFrame
         idxFrame = idxFrame + 1;
         waveforms = [];
 
-        % Randomly select how many signals to mix (1, 2, or 3)
+        % Reset available WLAN frequencies at the start of each frame
+        resetWLANFrequencies();
+
+        % Randomly select how many signals to mix (1, 2, 3 or 4)
         numSignals = randsample(possibleCombinations, 1, true, weights);
         labels = [];
 
         % Generate synthetic signals
         for iter = 1:numSignals
-            type_signal = randi(3);  % 1=ZigBee, 2=WLAN, 3=Bluetooth
+            type_signal = randi(4);  % 1=ZigBee, 2=WLAN, 3=Bluetooth 4 = SmartBAN
             [noisyWaveform, ~, label] = generateWaveform(type_signal);
             labels = cat(1, labels, label);
             waveforms = cat(2, waveforms, noisyWaveform);
@@ -88,6 +104,8 @@ function creatingTrainingImages(numFrame, label, sr, imageSize)
 
         % Save the final spectrogram and mask
         overlapLabelledImages(data_tot, idxFrame, dirName, labels, spectrogramTot);
+
+        pause(1);
     end
 end
 
@@ -234,18 +252,68 @@ function [noisyWf, wfFin, label] = generateWaveform(numOfSignal)
             label = "ZigBee";
 
         case 2  % WLAN
-            centerFreq = [2412e6, 2437e6, 2462e6];
-            choosenCF = randsample(centerFreq, 1);
+            try
+                choosenCF = getStaticWLANFrequency();
+                label = "WLAN";
+            catch ME
+                warning(ME.identifier,'%s', ME.message);
+                label = "Unkown";
+                return;
+            end
             channelType = randsample({'Rician', 'Rayleigh'}, 1);
             [noisyWf, wfFin] = myWlanHelper(choosenCF, channelType);
-            label = "WLAN";
 
         case 3  % Bluetooth
             channelType = randsample({'Rician', 'Rayleigh'}, 1);
             packetType = 'FHS';
             [noisyWf, wfFin] = myBluetoothHelper(packetType, channelType);
             label = "Bluetooth";
+        
+        case 4  %SmartBAN
+            label = "SmartBAN";
     end
 
     clearvars -except noisyWf wfFin label
+end
+
+
+function choosenCF = getStaticWLANFrequency()
+%GETSTATICWLANFREQUENCY Selects a static WLAN center frequency and removes it.
+%
+% This function returns one randomly selected WLAN center frequency
+% from a persistent list of available IEEE 802.11 channels.
+% Once a frequency is chosen, it is removed from the list to avoid reuse
+% within the same frame.
+%
+% To reset the list between frames, call resetWLANFrequencies().
+
+    persistent availableFreq
+
+    % Initialize once
+    if isempty(availableFreq)
+        availableFreq = [2412e6, 2437e6, 2462e6];
+    end
+
+    % Check if empty
+    if isempty(availableFreq)
+        error('No more WLAN center frequencies available.');
+    end
+
+    % Sample one frequency randomly
+    idx = randi(length(availableFreq));
+    choosenCF = availableFreq(idx);
+
+    % Remove it from the list
+    availableFreq(idx) = [];
+end
+
+function resetWLANFrequencies()
+%RESETWLANFREQUENCIES Resets the WLAN frequency list in getStaticWLANFrequency.
+%
+% This function clears the persistent variable used in getStaticWLANFrequency,
+% so that the list of available WLAN center frequencies is restored.
+% It should be called at the beginning of each new frame to allow
+% frequency reuse across frames.
+
+    clear getStaticWLANFrequency
 end
