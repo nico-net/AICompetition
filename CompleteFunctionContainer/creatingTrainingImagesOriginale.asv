@@ -170,7 +170,7 @@ function data = labellingImage(P_dB, label, pixelValues, imageSize)
 %   Output:
 %       data - (matrix) Binary mask with labeled regions.
 
-    threshold = max(P_dB(:)) - 25;
+    threshold = max(P_dB(:)) - 15;
     mask = P_dB >= threshold;
     mask = flipud(mask);  % Align with spectrogram
     cc = bwconncomp(mask);  % Find connected regions
@@ -186,8 +186,6 @@ function data = labellingImage(P_dB, label, pixelValues, imageSize)
     data = zeros(size(P_dB));
     pixelValue = pixelValues(label);
     data(mask) = pixelValue;
-    
-    data = imresize(data, imageSize, "nearest");
 
     im = imresize(im2uint8(rescale(data)), imageSize, "nearest");
 
@@ -213,20 +211,14 @@ function overlapLabelledImages(data, idxFrame, dir, labels, spectrogram)
 %   Outputs:
 %       None. Files are saved on disk.
 
-   % Identify the pixels where all layers (across 3rd dim) are equal
-    equal_vals = all(data == data(:,:,1), 3);  % MxN logical array: true where all planes are equal
+    equal_vals = all(data == data(:,:,1), 3);        % MxN: true dove tutti i piani sono uguali
+    data_sum = sum(data, 3);                         % somma normale
+    data_final = data_sum;                           % inizializza
     
-    % Compute the sum across the 3rd dimension
-    data_sum = sum(data, 3);  % MxN matrix: sum of values across all layers
-    
-    % Initialize the final data with the summed values
-    data_final = data_sum;
-    
-    % Overwrite the positions where all planes were equal, using the value from the first plane
+    % Sovrascrivi dove tutti i piani sono uguali
     tmp = data(:,:,1);
     data_final(equal_vals) = tmp(equal_vals);
-    
-    % Convert the final matrix to uint8
+
     data_final = uint8(data_final);
 
     label = strjoin(labels', '+');

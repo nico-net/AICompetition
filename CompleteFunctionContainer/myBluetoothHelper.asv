@@ -88,10 +88,11 @@ while (i<numSlots)
         release(fOff);
         currentRandomProfile = currentRandomProfile + 0.1;
     else
+        disp('Not sent')
         wfCompl = zeros(targetSampleRate*slotDuration*slotsLength, 1);
         currentRandomProfile = randomProfile;
         inputClock = inputClock + 2*slotsLength;
-        i = i + slotsLength;
+        i = i + slotsLength
     end
     finWf = [finWf; wfCompl];
     length(finWf)
