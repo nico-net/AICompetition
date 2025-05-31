@@ -177,7 +177,11 @@ function data = labellingImage(P_dB, label, pixelValues, imageSize)
 %   Output:
 %       data - (matrix) Binary mask with labeled regions.
 
-    threshold = max(P_dB(:)) - 25;
+    if strcmp(label, "SmartBAN")
+        threshold = max(P_dB(:)) - 28;
+    else
+        threshold = max(P_dB(:)) - 15;
+    end
     mask = P_dB >= threshold;
     mask = flipud(mask);  % Align with spectrogram
     cc = bwconncomp(mask);  % Find connected regions

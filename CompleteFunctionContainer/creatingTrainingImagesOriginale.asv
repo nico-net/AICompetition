@@ -88,7 +88,7 @@ function creatingTrainingImages(numFrame, label, sr, imageSize)
             waveforms = cat(2, waveforms, noisyWaveform);
         end
 
-        % Array of all the matrices 
+        % Array of all the label matrices 
         data_tot = [];
 
         % Generate labeled spectrogram masks
@@ -131,8 +131,9 @@ function [P, I] = createSpectrogram(waveform, sr, imageSize)
 %       P - (matrix) Spectrogram matrix in dB scale.
 %       I - (image)  RGB image representation of the spectrogram.
 
-    min_dB = -100;
-    max_dB = -30;
+    % Definisci la scala fissa
+    db_min = -130;
+    db_max = -50;
     Nfft = 4096;
     window = hann(256);
     overlap = 10;
@@ -140,17 +141,23 @@ function [P, I] = createSpectrogram(waveform, sr, imageSize)
 
     [~, ~, ~, P] = spectrogram(waveform, window, overlap, Nfft, sr, 'centered', 'psd');
 
-    P = 10 * log10(abs(P') + eps);  % dB conversion
-    P_clipped = max(min(P, max_dB), min_dB);  % Clip dynamic range
-
-    % Normalize to [1, 256] for color mapping
-    P_idx = round(1 + (P_clipped - min_dB) / (max_dB - min_dB) * (colormap_resolution - 1));
-    P_idx = max(min(P_idx, colormap_resolution), 1);
-
-    im = imresize(im2uint8(rescale(P_idx)), imageSize{1}, "nearest");
+    P = 10 * log10(abs(P') + eps);  % Conversione in dB
+    
+   
+    % Clipping dei valori fuori scala
+    P_db_clipped = min(max(P, db_min), db_max);
+    
+    % Normalizza tra 0 e 1 rispetto alla scala fissa
+    P_norm = (P_db_clipped - db_min) / (db_max - db_min);
+    
+    % Mappa su 256 livelli di grigio e ridimensiona
+    im = imresize(im2uint8(P_norm), imageSize{1}, "nearest");
+    
+    % Converti in RGB usando la colormap desiderata
     I = im2uint8(flipud(ind2rgb(im, parula(colormap_resolution))));  % RGB flip
+    
+    imshow(I);  % Per debug
 
-    imshow(I);  % For debug
 end
 
 
@@ -170,7 +177,11 @@ function data = labellingImage(P_dB, label, pixelValues, imageSize)
 %   Output:
 %       data - (matrix) Binary mask with labeled regions.
 
-    threshold = max(P_dB(:)) - 15;
+    if strcmp(label, "SmartBAN")
+        threshold = max(P_dB(:)) - 28;
+    els
+        threshold = max(P_dB(:)) - 15;
+    end
     mask = P_dB >= threshold;
     mask = flipud(mask);  % Align with spectrogram
     cc = bwconncomp(mask);  % Find connected regions
@@ -260,7 +271,7 @@ function [noisyWf, wfFin, label] = generateWaveform(numOfSignal)
     if numOfSignal < 1 || numOfSignal > 4
         error('Input must be an integer between 1 and 4.');
     end
-    disp(numOfSignal);
+
     switch uint8(numOfSignal)
         case 1  % ZigBee
             
