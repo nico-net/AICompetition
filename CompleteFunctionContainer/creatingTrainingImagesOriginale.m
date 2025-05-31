@@ -109,7 +109,7 @@ function creatingTrainingImages(numFrame, label, sr, imageSize)
         % Save the final spectrogram and mask
         overlapLabelledImages(data_tot, idxFrame, dirName, labels, spectrogramTot);
 
-        pause(1);
+        pause(1.5);
     end
 end
 
@@ -131,7 +131,7 @@ function [P, I] = createSpectrogram(waveform, sr, imageSize)
 %       P - (matrix) Spectrogram matrix in dB scale.
 %       I - (image)  RGB image representation of the spectrogram.
 
-    % Definisci la scala fissa
+    % Declare the fixed scale
     db_min = -130;
     db_max = -50;
     Nfft = 4096;
@@ -144,19 +144,19 @@ function [P, I] = createSpectrogram(waveform, sr, imageSize)
     P = 10 * log10(abs(P') + eps);  % Conversione in dB
     
    
-    % Clipping dei valori fuori scala
+    % Clipping of outliers
     P_db_clipped = min(max(P, db_min), db_max);
     
-    % Normalizza tra 0 e 1 rispetto alla scala fissa
+    % Normalization with respect to the fixed scale
     P_norm = (P_db_clipped - db_min) / (db_max - db_min);
     
-    % Mappa su 256 livelli di grigio e ridimensiona
+    % Mapping on a 256-value gray scale
     im = imresize(im2uint8(P_norm), imageSize{1}, "nearest");
     
-    % Converti in RGB usando la colormap desiderata
+    % Convert the image in RGB form
     I = im2uint8(flipud(ind2rgb(im, parula(colormap_resolution))));  % RGB flip
     
-    imshow(I);  % Per debug
+    %imshow(I);  % Per debug
 
 end
 
@@ -203,7 +203,7 @@ function data = labellingImage(P_dB, label, pixelValues, imageSize)
     im = imresize(im2uint8(rescale(data)), imageSize, "nearest");
 
     figure;
-    imshow(im);
+    %imshow(im);
     title('Spectrogram Mask');
 end
 
