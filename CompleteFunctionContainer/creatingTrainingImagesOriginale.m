@@ -41,7 +41,7 @@ function creatingTrainingImages(numFrame, label, sr, imageSize)
 %   Output:
 %       None. The function saves image files to disk.
 
-    close all
+    close all; clear;
     numberOfLabels = 17;
     sr = 20e6;
     imageSize = {[1024, 1024]};
@@ -77,11 +77,14 @@ function creatingTrainingImages(numFrame, label, sr, imageSize)
         % Randomly select how many signals to mix (1, 2, 3 or 4)
         numSignals = randsample(possibleCombinations, 1, true, weights);
         labels = [];
-
+        numSignals = 3;
+        %Debugging
+        fprintf("Num Signals: %d\n", numSignals);
         % Generate synthetic signals
         for iter = 1:numSignals
             type_signal = randi(4);  % 1=ZigBee, 2=WLAN, 3=Bluetooth 4 = SmartBAN
             [noisyWaveform, ~, label] = generateWaveform(type_signal);
+            fprintf("Type of signal: %s\n", label);
             labels = cat(1, labels, label);
             waveforms = cat(2, waveforms, noisyWaveform);
         end
@@ -96,7 +99,8 @@ function creatingTrainingImages(numFrame, label, sr, imageSize)
             labeledImage = labellingImage(spectrogram, label, pixelValues, imageSize{1});
             data_tot = cat(3, data_tot, labeledImage);
         end
-
+        
+        
         % Mix signals and create final spectrogram
         mixedSignal = mySignalMixer(waveforms);
         mixedSignal = scalingPower(mixedSignal);
@@ -166,7 +170,7 @@ function data = labellingImage(P_dB, label, pixelValues, imageSize)
 %   Output:
 %       data - (matrix) Binary mask with labeled regions.
 
-    threshold = max(P_dB(:)) - 13;
+    threshold = max(P_dB(:)) - 15;
     mask = P_dB >= threshold;
     mask = flipud(mask);  % Align with spectrogram
     cc = bwconncomp(mask);  % Find connected regions
@@ -207,7 +211,14 @@ function overlapLabelledImages(data, idxFrame, dir, labels, spectrogram)
 %   Outputs:
 %       None. Files are saved on disk.
 
-    data_final = sum(data, 3);
+    equal_vals = all(data == data(:,:,1), 3);        % MxN: true dove tutti i piani sono uguali
+    data_sum = sum(data, 3);                         % somma normale
+    data_final = data_sum;                           % inizializza
+    
+    % Sovrascrivi dove tutti i piani sono uguali
+    tmp = data(:,:,1);
+    data_final(equal_vals) = tmp(equal_vals);
+
     data_final = uint8(data_final);
 
     label = strjoin(labels', '+');
@@ -238,17 +249,18 @@ function [noisyWf, wfFin, label] = generateWaveform(numOfSignal)
     if ~isscalar(numOfSignal) || ~isnumeric(numOfSignal) || floor(numOfSignal) ~= numOfSignal
         error('Input must be an integer.');
     end
-    if numOfSignal < 1 || numOfSignal > 3
-        error('Input must be an integer between 1 and 3.');
+    if numOfSignal < 1 || numOfSignal > 4
+        error('Input must be an integer between 1 and 4.');
     end
-
-    switch numOfSignal
+    disp(numOfSignal);
+    switch uint8(numOfSignal)
         case 1  % ZigBee
+            
             spc = 4;
             numPackets = randi(3);
             centerFreq = 2405e6 + 5e6 * (randi(16) - 11);
             channelType = randsample({'Rician', 'Rayleigh', 'AWGN'}, 1);
-            [noisyWf, wfFin] = myZigbEEHelper(spc, numPackets, centerFreq, channelType);
+            [noisyWf, wfFin] = myZigbEEHelper(spc, numPackets, centerFreq, channelType{1});
             label = "ZigBee";
 
         case 2  % WLAN
@@ -261,16 +273,20 @@ function [noisyWf, wfFin, label] = generateWaveform(numOfSignal)
                 return;
             end
             channelType = randsample({'Rician', 'Rayleigh'}, 1);
-            [noisyWf, wfFin] = myWlanHelper(choosenCF, channelType);
+            [noisyWf, wfFin] = myWlanHelper(choosenCF, channelType{1});
 
         case 3  % Bluetooth
             channelType = randsample({'Rician', 'Rayleigh'}, 1);
             packetType = 'FHS';
-            [noisyWf, wfFin] = myBluetoothHelper(packetType, channelType);
+            [noisyWf, wfFin] = myBluetoothHelper(packetType, channelType{1});
             label = "Bluetooth";
         
         case 4  %SmartBAN
             label = "SmartBAN";
+            channelType = randsample({'Rician', 'Rayleigh'}, 1);
+            centerFrequency = randi([0, 39]) * 2e6;
+            centerFrequency = centerFrequency + 2.402e9;
+            [noisyWf, wfFin] = mySmartBanHelper(channelType{1}, centerFrequency);
     end
 
     clearvars -except noisyWf wfFin label
