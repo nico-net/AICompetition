@@ -61,6 +61,7 @@ end
 i = 0;
 while (i<numSlots)
     if (rand > currentRandomProfile)
+        disp('sent')
         dataBits = randi([0 1], cfgBt.PayloadLength * octetLength, 1);
         wf = bluetoothWaveformGenerator(dataBits, cfgBt);
         switch ChannelType
@@ -86,18 +87,19 @@ while (i<numSlots)
         wfCompl = [fOffwf; zeros(slotDuration * targetSampleRate, 1)];
         inputClock = inputClock + 2;
         i = i + 1;
+        if i > 
+
         release(fOff);
         currentRandomProfile = currentRandomProfile + 0.1;
     else
+        disp('Not sent')
         wfCompl = zeros(targetSampleRate*slotDuration*slotsLength, 1);
         currentRandomProfile = randomProfile;
         inputClock = inputClock + 2*slotsLength;
-        i = i + slotsLength;
+        i = i + slotsLength
     end
     finWf = [finWf; wfCompl];
-    if i > numSlots
-        finWf = finWf(1:timeSimulation*targetSampleRate);
-    end
+    length(finWf)
 end   
 
 noisyWf = awgn(finWf, 20);

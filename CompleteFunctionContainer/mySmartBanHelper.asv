@@ -72,12 +72,12 @@ beaconSignal = beaconchan(beaconSignal);
 startPoint = floor(rand() * timeDuration * sampleRate);
 
 
-if (startPoint > timeDuration * sampleRate - length(beaconSignal) + 1)
+if (startPoint > timeDuration * sampleRate - length(beaconSignal))
   finWf = [zeros(startPoint -1, 1); beaconSignal];
   finWf = finWf(1:timeDuration * sampleRate);
-elseif (startPoint > timeDuration * sampleRate - slotDuration*sampleRate + 1)
-    finWf = [zeros(startPoint -1, 1); beaconSignal; zeros(slotDuration * sampleRate - length(beaconSignal), 1)];
-    finWf = finWf(1:timeDuration * sampleRate);
+  disp('This case')
+else if (startPoint > timeDuration * sampleRate - slotDuration*sampleRate)
+    finWf = [zeros(startPoint -1, 1); beaconSignal; zeros(timeDuration * timeDuration - startPoint - length(beaconSignal), 1)];
 else 
     finWf = [zeros(startPoint - 1, 1); beaconSignal; zeros(sampleRate * slotDuration - length(beaconSignal), 1)];
     while (length(finWf) < timeDuration * sampleRate)
