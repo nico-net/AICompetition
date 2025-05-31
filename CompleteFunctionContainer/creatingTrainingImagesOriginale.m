@@ -82,7 +82,10 @@ function creatingTrainingImages(numFrame, label, sr, imageSize)
         fprintf("Num Signals: %d\n", numSignals);
         % Generate synthetic signals
         for iter = 1:numSignals
-            type_signal = randi(4);  % 1=ZigBee, 2=WLAN, 3=Bluetooth 4 = SmartBAN
+            type_signal = 3;
+            while type_signal == 3
+                type_signal = randi(4);  % 1=ZigBee, 2=WLAN, 3=Bluetooth 4 = SmartBAN
+            end
             [noisyWaveform, ~, label] = generateWaveform(type_signal);
             fprintf("Type of signal: %s\n", label);
             labels = cat(1, labels, label);
@@ -170,7 +173,7 @@ function data = labellingImage(P_dB, label, pixelValues, imageSize)
 %   Output:
 %       data - (matrix) Binary mask with labeled regions.
 
-    threshold = max(P_dB(:)) - 15;
+    threshold = max(P_dB(:)) - 25;
     mask = P_dB >= threshold;
     mask = flipud(mask);  % Align with spectrogram
     cc = bwconncomp(mask);  % Find connected regions
@@ -220,6 +223,8 @@ function overlapLabelledImages(data, idxFrame, dir, labels, spectrogram)
     data_final(equal_vals) = tmp(equal_vals);
 
     data_final = uint8(data_final);
+    disp(size(data_final));  % dovrebbe stampare [1024 1024]
+    whos data_final          % per verificare tipo e dimensioni
 
     label = strjoin(labels', '+');
     filename = label + '_frame_' + num2str(idxFrame);
@@ -277,7 +282,13 @@ function [noisyWf, wfFin, label] = generateWaveform(numOfSignal)
 
         case 3  % Bluetooth
             channelType = randsample({'Rician', 'Rayleigh'}, 1);
-            packetType = 'FHS';
+            packetTypes = {'ID', 'FHS', 'DM1', 'DM3', 'DM5', 'DH1', 'DH3', 'DH5', ...
+               'HV1', 'HV2', 'HV3', 'DV', 'AUX1', ...
+               'EV3', 'EV4', 'EV5', ...
+               '2-DH1', '2-DH3', '2-DH5', '3-DH1', '3-DH3', '3-DH5', ...
+               '2-EV3', '2-EV5', '3-EV3', '3-EV5'};
+
+            packetType = packetTypes{randi(length(packetTypes))};
             [noisyWf, wfFin] = myBluetoothHelper(packetType, channelType{1});
             label = "Bluetooth";
         
