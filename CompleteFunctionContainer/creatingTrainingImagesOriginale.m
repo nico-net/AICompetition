@@ -170,7 +170,7 @@ function data = labellingImage(P_dB, label, pixelValues, imageSize)
 %   Output:
 %       data - (matrix) Binary mask with labeled regions.
 
-    threshold = max(P_dB(:)) - 15;
+    threshold = max(P_dB(:)) - 25;
     mask = P_dB >= threshold;
     mask = flipud(mask);  % Align with spectrogram
     cc = bwconncomp(mask);  % Find connected regions
@@ -186,6 +186,8 @@ function data = labellingImage(P_dB, label, pixelValues, imageSize)
     data = zeros(size(P_dB));
     pixelValue = pixelValues(label);
     data(mask) = pixelValue;
+    
+    data = imresize(data, imageSize, "nearest");
 
     im = imresize(im2uint8(rescale(data)), imageSize, "nearest");
 
@@ -211,14 +213,20 @@ function overlapLabelledImages(data, idxFrame, dir, labels, spectrogram)
 %   Outputs:
 %       None. Files are saved on disk.
 
-    equal_vals = all(data == data(:,:,1), 3);        % MxN: true dove tutti i piani sono uguali
-    data_sum = sum(data, 3);                         % somma normale
-    data_final = data_sum;                           % inizializza
+   % Identify the pixels where all layers (across 3rd dim) are equal
+    equal_vals = all(data == data(:,:,1), 3);  % MxN logical array: true where all planes are equal
     
-    % Sovrascrivi dove tutti i piani sono uguali
+    % Compute the sum across the 3rd dimension
+    data_sum = sum(data, 3);  % MxN matrix: sum of values across all layers
+    
+    % Initialize the final data with the summed values
+    data_final = data_sum;
+    
+    % Overwrite the positions where all planes were equal, using the value from the first plane
     tmp = data(:,:,1);
     data_final(equal_vals) = tmp(equal_vals);
-
+    
+    % Convert the final matrix to uint8
     data_final = uint8(data_final);
 
     label = strjoin(labels', '+');
@@ -277,7 +285,13 @@ function [noisyWf, wfFin, label] = generateWaveform(numOfSignal)
 
         case 3  % Bluetooth
             channelType = randsample({'Rician', 'Rayleigh'}, 1);
-            packetType = 'FHS';
+            packetTypes = {'ID', 'FHS', 'DM1', 'DM3', 'DM5', 'DH1', 'DH3', 'DH5', ...
+               'HV1', 'HV2', 'HV3', 'DV', 'AUX1', ...
+               'EV3', 'EV4', 'EV5', ...
+               '2-DH1', '2-DH3', '2-DH5', '3-DH1', '3-DH3', '3-DH5', ...
+               '2-EV3', '2-EV5', '3-EV3', '3-EV5'};
+
+            packetType = packetTypes{randi(length(packetTypes))};
             [noisyWf, wfFin] = myBluetoothHelper(packetType, channelType{1});
             label = "Bluetooth";
         
