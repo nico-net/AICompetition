@@ -44,7 +44,7 @@ function creatingTrainingImages(numFrame, label, sr, imageSize)
     close all; 
     numberOfLabels = 17;
     sr = 20e6;
-    imageSize = {[1024, 1024]};
+    imageSize = {[128, 128]};
     linSpace = linspace(0,256, numberOfLabels);
     pixelValues = containers.Map(...
         {'WLAN', 'ZigBee', 'Bluetooth', 'SmartBAN'}, ...
@@ -54,14 +54,14 @@ function creatingTrainingImages(numFrame, label, sr, imageSize)
     for index = 1:length(imageSize)
         imgSize = imageSize{index};
         folderName = sprintf('%dx%d', imgSize(1), imgSize(2));
-        dirName = fullfile('trainingImages', folderName);
+        dirName = fullfile('trainingImages_Nicola', folderName);
         if ~exist(dirName, 'dir')
             mkdir(dirName);
         end
     end
     
     idxFrame = 0;
-    numFrame = 1;  % Override for test/debug
+    numFrame = 10;  % Override for test/debug
 
     % Class mixture probabilities: more likely to have 1 signal
     weights = [0.4 0.3 0.2 0.1];    
@@ -202,9 +202,9 @@ function data = labellingImage(P_dB, label, pixelValues, imageSize)
 
     im = imresize(im2uint8(rescale(data)), imageSize, "nearest");
 
-    figure;
+    %figure;
     %imshow(im);
-    title('Spectrogram Mask');
+    %title('Spectrogram Mask');
 end
 
 
