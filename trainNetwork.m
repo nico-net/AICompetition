@@ -1,8 +1,10 @@
 %% Spectrogram Segmentation using U-Net with ResNet34 Encoder
 
 classNames = '';
+
 % Set your folder path
-dataFolder = fullfile(pwd, 'trainingImages/128x128');
+fileID = '';
+dataFolder = downloadAndUnzipGoogleDrive(fileID, 'trainingImages');
 
 %% STEP 1: Create Image Datastore
 imds = imageDatastore(dataFolder, 'FileExtensions', {'.png'}, 'IncludeSubfolders', false);
@@ -54,3 +56,53 @@ figure;
 imshow(labeloverlay(testImage, predicted));
 title('Predicted Segmentation');
 
+
+%% Functions
+
+function folderPath = downloadAndUnzipGoogleDrive(fileID, outputFolder)
+%DOWNLOADANDUNZIPGOOGLEDRIVE Downloads and extracts a ZIP from Google Drive
+%
+% Inputs:
+%   - fileID: Google Drive File ID (from share link)
+%   - outputFolder: Destination folder (optional). Defaults to tempdir.
+%
+% Output:
+%   - folderPath: Full path to the extracted folder
+
+    if nargin < 2 || isempty(outputFolder)
+        outputFolder = fullfile(tempdir, 'downloadedSpectrogramData');
+    end
+
+    % Create output folder if it doesn't exist
+    if ~exist(outputFolder, 'dir')
+        mkdir(outputFolder);
+    end
+
+    % Construct download URL
+    url = ['https://drive.google.com/uc?export=download&id=' fileID];
+
+    % Set zip file path
+    zipFile = fullfile(outputFolder, 'data.zip');
+
+    % Download zip
+    fprintf('Downloading from Google Drive...\n');
+    outFile = websave(zipFile, url);
+
+    % Unzip
+    fprintf('Unzipping contents...\n');
+    unzip(outFile, outputFolder);
+
+    % Find the unzipped folder (first subfolder or use root)
+    contents = dir(outputFolder);
+    isDir = [contents.isdir];
+    folderNames = contents(isDir);
+    folderNames = folderNames(~ismember({folderNames.name}, {'.', '..'}));
+
+    if isscalar(folderNames)
+        folderPath = fullfile(outputFolder, folderNames(1).name);
+    else
+        folderPath = outputFolder;  % use root if no subfolder
+    end
+
+    fprintf('Data available in: %s\n', folderPath);
+end
