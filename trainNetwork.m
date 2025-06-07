@@ -1,17 +1,11 @@
 %% Spectrogram Segmentation using U-Net with ResNet34 Encoder
 clear; close all;clc;
 
-numClasses = 17;
+numClasses = 6;
 classNames = [ ...
-    "AWGN", "WLAN", "Bluetooth", "WLAN+Bluetooth", ...
-    "ZigBee", "WLAN+ZigBee", "Bluetooth+ZigBee", "WLAN+Bluetooth+ZigBee", ...
-    "SmartBAN", "WLAN+SmartBAN", "Bluetooth+SmartBAN", "WLAN+Bluetooth+SmartBAN", ...
-    "ZigBee+SmartBAN", "WLAN+ZigBee+SmartBAN", "Bluetooth+ZigBee+SmartBAN", ...
-    "WLAN+Bluetooth+ZigBee+SmartBAN", "Unknown"
-];
+    "AWGN", "WLAN", "ZigBee","Bluetooth", "SmartBAN", "Unknown"];
 
-pixelLabelID = uint8([0, 16, 32, 48, 64, 80, 96, 112, ...
-                128, 144, 160, 176, 192, 208, 224, 240, 255]);
+pixelLabelID = uint8([0, 16, 32, 64, 128, 255]);
 
 % Set your folder path
 dataFolder = fullfile(pwd,"CompleteFunctionContainer/trainingImages_Nicola/128x128");
@@ -53,7 +47,6 @@ cdsVal = combine(imdsVal,pxdsVal);
 cdsTest = combine(imdsTest,pxdsTest);
 
 %% STEP 4: Define U-Net Network with ResNet34 Encoder
-
 imageSize = [128, 128, 3];
 [encoderNet, encoderOutputLayers] = ...
     pretrainedEncoderNetwork('resnet18', 4);
@@ -64,74 +57,38 @@ plot(lgraph);
 
 %% STEP 5: Training Options
 options = trainingOptions('adam', ...
-    'InitialLearnRate',1e-4, ...
-    'MaxEpochs',25, ...
-    'MiniBatchSize',8, ...
-    'Shuffle','every-epoch', ...
-    'ValidationData',cdsVal, ...
-    'VerboseFrequency',10, ...
-    'Plots','training-progress', ...
-    'CheckpointPath', fullfile(pwd,'savingFolder'), ... % Specify your desired saving directory
-    'CheckpointFrequency', 1); % Save every 5 epochs
+    'InitialLearnRate', 7e-4, ...
+    'LearnRateSchedule', 'piecewise', ...
+    'LearnRateDropFactor', 0.1, ...
+    'LearnRateDropPeriod', 10, ...
+    'MaxEpochs', 25, ...
+    'MiniBatchSize', 32, ...
+    'Shuffle', 'every-epoch', ...
+    'ValidationData', cdsVal, ...
+    'ValidationFrequency', 50, ...
+    'VerboseFrequency', 50, ...
+    'Plots', 'training-progress', ...
+    'CheckpointPath', fullfile(pwd,'savingFolder'), ... 
+    'CheckpointFrequency', 1, ...
+    'ExecutionEnvironment', 'multi-gpu', ...
+    'Metrics','accuracy'); % Save every epoch
 
 
 %% STEP 6: Train the Network
+% [net,trainInfo] = trainnet(cdsTrain, lgraph, ...
+%     @(ypred,ytrue) lossFunction(ypred,ytrue,classWeights),options);
 [net,trainInfo] = trainnet(cdsTrain, lgraph, ...
-    @(ypred,ytrue) lossFunction(ypred,ytrue,classWeights),options);
-    save(sprintf('myNet_%s_%s',baseNetwork, ...
+   "crossentropy",options);
+    save(sprintf('myNet_%s', ...
         datetime('now',format='yyyy_MM_dd_HH_mm')), 'net');
 
-%% STEP 7: Test Prediction on One Image
-
-% Number of test images to visualize
-numSamples = 5;
-
-% Loop through the first few test images
-for i = 1:numSamples
-    % Read one test image and its ground truth label
-    data = read(cdsTest);
-    testImage = data.InputImage;
-    trueLabel = data.PixelLabelImage;
-
-    % Predict segmentation
-    predicted = semanticseg(testImage, net);
-
-    % Display result
-    figure;
-    imshowpair(labeloverlay(testImage, predicted), label2rgb(uint8(trueLabel)));
-    title(sprintf('Predicted (Left) vs Ground Truth (Right) - Sample %d', i));
-end
-
-
-%% STEP 8: Evaluating key metrics
-
-% Evaluate the network on the test set
-metrics = evaluateSemanticSegmentation(cdsTest, net, ...
-    'Verbose', true);
-
-% Display key performance metrics
-disp('Overall Accuracy:');
-disp(metrics.DataSetMetrics.OverallAccuracy);
-
-disp('Mean Accuracy:');
-disp(metrics.DataSetMetrics.MeanAccuracy);
-
-disp('Mean IoU (Intersection over Union):');
-disp(metrics.DataSetMetrics.MeanIoU);
-
-disp('Weighted IoU:');
-disp(metrics.DataSetMetrics.WeightedIoU);
-
-disp('Class Metrics:');
-disp(metrics.ClassMetrics);  % Table with Precision, Recall, IoU per class
-
-
-confMat = metrics.ConfusionMatrix.NormalizedValues;
-figure;
-heatmap(classNames, classNames, confMat);
-xlabel('Predicted');
-ylabel('True');
-title('Normalized Confusion Matrix');
+%% STEP 7: Compute metrics and scores
+pxdsResults = semanticseg(imdsTest,net,MinibatchSize=32,WriteLocation=tempdir, ...
+    Classes=classNames);
+metrics = evaluateSemanticSegmentation(pxdsResults,pxdsTest);
+cm = confusionchart(metrics.ConfusionMatrix.Variables, ...
+  classNames, Normalization='row-normalized');
+cm.Title = 'Confusion Matrix';
 
 
 %% Functions
@@ -226,38 +183,69 @@ end
 
 
 
-function loss = lossFunction(ypred, ytrue, classWeights)
+function lossOut = lossFunction(ypred, ytrue, classWeights)
 % Combina cross-entropy e Dice loss per segmentazione multiclass
+% Ora con gestione NaN e ritorno di valori intermedi per debug
 
-% Converte ytrue da [H W N] a one-hot [H W C N]
-numClasses = size(ypred, 3);
-ytrueOH = ytrue;
+lossOut = struct(); % Struct to return everything for debugging
 
-% ---- Cross-Entropy Loss ----
-eps = 1e-8;
-ypred = max(min(ypred, 1 - eps), eps); % Evita log(0)
-ceLoss = -sum(ytrueOH .* log(ypred), 3); % [H W N]
-% Pesa ogni pixel in base alla classe vera
-weightsPerPixel = sum(ytrueOH .* reshape(classWeights, 1, 1, []), 3);
-ceLoss = weightsPerPixel .* ceLoss;
-crossEntropy = mean(ceLoss(:));
+try
+    % Convert ytrue to one-hot if not already [H W C N]
+    numClasses = size(ypred, 3);
+    ytrueOH = ytrue;
 
-% ---- Dice Loss ----
-diceLoss = 0;
-for c = 1:numClasses
-    ypredC = ypred(:,:,c,:);
-    ytrueC = ytrueOH(:,:,c,:);
+    % ---- Cross-Entropy Loss ----
+    epsVal = 1e-8;
+    ypredClipped = max(min(ypred, 1 - epsVal), epsVal); % Avoid log(0)
+    ceLoss = -sum(ytrueOH .* log(ypredClipped), 3);     % [H W N]
     
-    intersection = sum(ypredC(:) .* ytrueC(:));
-    denom = sum(ypredC(:)) + sum(ytrueC(:)) + eps;
-    dice = 2 * intersection / denom;
-    
-    diceLoss = diceLoss + (1 - dice); % Dice loss = 1 - Dice coefficient
+    weightsPerPixel = sum(ytrueOH .* reshape(classWeights, 1, 1, []), 3); % [H W N]
+    ceLoss = weightsPerPixel .* ceLoss;
+    crossEntropy = mean(ceLoss(:));
+
+    % ---- Dice Loss ----
+    diceLoss = 0;
+    dicePerClass = zeros(1, numClasses);
+    for c = 1:numClasses
+        ypredC = ypred(:,:,c,:);
+        ytrueC = ytrueOH(:,:,c,:);
+        
+        intersection = sum(ypredC(:) .* ytrueC(:));
+        denom = sum(ypredC(:)) + sum(ytrueC(:)) + epsVal;
+        dice = 2 * intersection / denom;
+
+        dicePerClass(c) = dice;
+        diceLoss = diceLoss + (1 - dice); % Dice loss = 1 - Dice coefficient
+    end
+    diceLoss = diceLoss / numClasses;
+
+    % ---- Combined Loss ----
+    alpha = 1; % Set as needed
+    loss = alpha * crossEntropy + (1 - alpha) * diceLoss;
+
+    % ---- NaN Check ----
+    if any(isnan([loss, crossEntropy, diceLoss]))
+        warning('NaN detected in loss computation. Returning diagnostic output.');
+    end
+
+catch ME
+    warning('Exception caught during loss computation: %s', ME.message);
+    loss = NaN;
+    crossEntropy = NaN;
+    diceLoss = NaN;
+    dicePerClass = NaN(1, numClasses);
 end
-diceLoss = diceLoss / numClasses;
 
-% ---- Combined Loss ----
-alpha = 0.7; % Peso bilanciato tra CE e Dice
-loss = alpha * crossEntropy + (1 - alpha) * diceLoss;
+% ---- Return Diagnostic Output ----
+lossOut.loss = loss;
+lossOut.crossEntropy = crossEntropy;
+lossOut.diceLoss = diceLoss;
+lossOut.dicePerClass = dicePerClass;
+lossOut.ypred = ypred;
+lossOut.ytrue = ytrue;
+lossOut.ytrueOH = ytrueOH;
+lossOut.classWeights = classWeights;
+lossOut.weightsPerPixel = weightsPerPixel;
+lossOut.ceLossMap = ceLoss;
 
 end
