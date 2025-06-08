@@ -54,17 +54,17 @@ function creatingTrainingImages(numFrame, label, sr, imageSize)
     for index = 1:length(imageSize)
         imgSize = imageSize{index};
         folderName = sprintf('%dx%d', imgSize(1), imgSize(2));
-        dirName = fullfile('trainingImages_Nicola', folderName);
+        dirName = fullfile('trainingImages_Giacomo', folderName);
         if ~exist(dirName, 'dir')
             mkdir(dirName);
         end
     end
     
-    idxFrame = 0;
-    numFrame = 10;  % Override for test/debug
+    idxFrame = 3000;
+    numFrame = 11e3;  % Override for test/debug
 
     % Class mixture probabilities: more likely to have 1 signal
-    weights = [0.4 0.3 0.2 0.1];    
+    weights = [0.2 0.2 0.3 0.3];    
     possibleCombinations = [1 2 3 4];
 
     while idxFrame < numFrame
@@ -246,6 +246,7 @@ function overlapLabelledImages(data, idxFrame, dir, labels, spectrogram)
     save(char(fname + ".mat"), 'data_final');
 
     imwrite(spectrogram, char(fname + "_spectogram.png"));
+    idxFrame
 end
 
 
@@ -296,7 +297,7 @@ function [noisyWf, wfFin, label] = generateWaveform(numOfSignal)
 
         case 3  % Bluetooth
             channelType = randsample({'Rician', 'Rayleigh'}, 1);
-            packetTypes = {'ID', 'FHS', 'DM1', 'DM3', 'DM5', 'DH1', 'DH3', 'DH5', ...
+            packetTypes = {'FHS', 'DM1', 'DM3', 'DM5', 'DH1', 'DH3', 'DH5', ...
                'HV1', 'HV2', 'HV3', 'DV', 'AUX1', ...
                'EV3', 'EV4', 'EV5', ...
                '2-DH1', '2-DH3', '2-DH5', '3-DH1', '3-DH3', '3-DH5', ...
