@@ -1,5 +1,5 @@
 % =============================================
-%  Signal Combination → Linear Label Mapping (17 levels)
+%  Signal Combination → Linear Label Mapping (6 levels)
 % =============================================
 %
 %  Bitmask | Signal Combination                     | Label
@@ -7,21 +7,9 @@
 %    0     | AWGN                                   | 0
 %    1     | WLAN                                   | 16
 %    2     | Bluetooth                              | 32
-%    3     | WLAN + Bluetooth                       | 48
-%    4     | ZigBee                                 | 64
-%    5     | WLAN + ZigBee                          | 80
-%    6     | Bluetooth + ZigBee                     | 96
-%    7     | WLAN + Bluetooth + ZigBee              | 112
-%    8     | SmartBAN                               | 128
-%    9     | WLAN + SmartBAN                        | 144
-%   10     | Bluetooth + SmartBAN                   | 160
-%   11     | WLAN + Bluetooth + SmartBAN            | 176
-%   12     | ZigBee + SmartBAN                      | 192
-%   13     | WLAN + ZigBee + SmartBAN               | 208
-%   14     | Bluetooth + ZigBee + SmartBAN          | 224
-%   15     | WLAN + Bluetooth + ZigBee + SmartBAN   | 240
-%   ---    | Unknown                                | 255
-
+%    3     | ZigBee                                 | 64
+%    4     | SmartBAN                               | 128
+%    5     | Unkwnown                               | 255
 
 function creatingTrainingImages(numFrame, label, sr, imageSize)
 % CREATINGTRAININGIMAGES Generates and saves labeled spectrogram images for training.
@@ -42,7 +30,7 @@ function creatingTrainingImages(numFrame, label, sr, imageSize)
 %       None. The function saves image files to disk.
 
     close all; 
-    numberOfLabels = 17;
+    numberOfLabels = 6;
     sr = 20e6;
     imageSize = {[128, 128]};
     linSpace = linspace(0,256, numberOfLabels);
