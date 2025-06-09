@@ -1,5 +1,5 @@
 
-function helperVisualizationPredictedAndTrueLabels(folderName, numSamples, varargin)
+function helperVisualizationPredictedAndTrueLabels(folderName,net, numSamples, varargin)
 % HELPERVISUALIZATIONPREDICTEDANDTRUELABELS Visualize predictions vs ground truth labels
 %
 % This function loads random samples from a dataset, performs semantic
@@ -39,16 +39,11 @@ function helperVisualizationPredictedAndTrueLabels(folderName, numSamples, varar
 
 % Parse input arguments
 p = inputParser;
-load('/home/nicola-gallucci/Nicola/Matlab/AICHallenge/AICompetition/SuccesfulNets/SuccesfulNets/ResNet18_Unet_080625/ResNet18_Unet_080625.mat')
-numClasses = 6;
 classNames = [ ...
     "AWGN", "WLAN", "ZigBee","Bluetooth", "SmartBAN", "Unknown"];
 
-folder = "CompleteFunctionContainer/trainingImages_Nicola/128x128";
-
-% matFiles = dir(fullfile(folder, '*_frame_*.mat'));
 addRequired(p, 'folderName', @(x) ischar(x) || isstring(x));
-%addRequired(p, 'net', @(x) isa(x, 'SeriesNetwork') || isa(x, 'DAGNetwork') || isa(x, 'dlnetwork'));
+addRequired(p, 'net', @(x) isa(x, 'SeriesNetwork') || isa(x, 'DAGNetwork') || isa(x, 'dlnetwork'));
 addRequired(p, 'numSamples', @(x) isnumeric(x) && x > 0 && x == round(x));
 
 addParameter(p, 'ImageSize', [128, 128], @(x) isnumeric(x) && length(x) == 2);
@@ -59,7 +54,8 @@ addParameter(p, 'FilePattern', '*_frame_*.mat', @(x) ischar(x) || isstring(x));
 addParameter(p, 'LabelVarName', 'data_final', @(x) ischar(x) || isstring(x));
 addParameter(p, 'ImageSuffix', '_spectogram.png', @(x) ischar(x) || isstring(x));
 
-parse(p, folderName, net, numSamples, classNames, varargin{:});
+%parse(p, folderName, net, numSamples, classNames, varargin{:});
+parse(p, folderName, net, numSamples, varargin{:});
 
 % Extract parsed values
 imageSize = p.Results.ImageSize;
@@ -125,10 +121,10 @@ for i = 1:numSamples
         
         % Build image filename from label filename
         [~, baseName, ~] = fileparts(selectedFiles(i).name);
-        imageFilename = fullfile(folderName, baseName + imageSuffix);
-        fprintf("oh\n");
+        
+        imageFilename = fullfile(folderName, cat(2, baseName, imageSuffix));
         % Check if image file exists
-        keyboard
+        
         if ~isfile(imageFilename)
             warning('Image file not found: %s. Skipping sample %d.', imageFilename, i);
             continue;
@@ -136,12 +132,11 @@ for i = 1:numSamples
         
         % Load and preprocess image
         img = imread(imageFilename);
-        fprintf("oh\n");
         % Display original image
         figure('Name', sprintf('Sample %d/%d - Original Image', i, numSamples));
         imshow(img);
         title(sprintf('Original Image: %s', baseName), 'Interpreter', 'none');
-        keyboard
+        
         
         % Resize image
         img = imresize(img, imageSize);
@@ -178,52 +173,15 @@ for i = 1:numSamples
             pause();
             close all;
         end
-        
+          
     catch ME
-        warning('Error processing sample %d (%s): %s', i, selectedFiles(i).name, ME.message);
-        continue;
-    end
+            warning('Error processing sample %d (%s): %s', i, selectedFiles(i).name, ME.message);
+            continue;
+        end
 end
 
 fprintf('Visualization complete!\n');
 
-end
-
-
-
-function helperSpecSenseDisplayResults(trueLabels, predictedLabels, classNames)
-%helperSpecSenseDisplayResults Display spectrogram + true/predicted labels
-% helperSpecSenseDisplayResults(TL, PL, CLASSNAMES) displays
-% the true and predicted segmentation label masks.
-
-% Define custom mapping values and class names
-cmap = cool(numel(classNames)); % or define your own colors
-
-% Use the actual data values as tick positions
-ticks = 1:numel(classNames);
-
-figure;
-
-% Plot True Labels
-subplot(2,1,1);
-img = imagesc(trueLabels);
-colormap(gca, cmap);
-clim([1, numel(classNames)]);
-title("True signal labels");
-set(gca,'YDir','normal')
-img.Parent.Colormap = cmap;
-colorbar('TickLabels',cellstr(classNames),'Ticks',ticks,...
-    'TickLength',0,'TickLabelInterpreter','none');
-
-% Plot Predicted Labels  
-subplot(2,1,2);
-img = imagesc(predictedLabels);
-colormap(gca, cmap);
-clim([1, numel(classNames)]);
-set(gca,'YDir','normal')
-img.Parent.Colormap = cmap;
-colorbar('TickLabels',cellstr(classNames),'Ticks',ticks,...
-    'TickLength',0,'TickLabelInterpreter','none');
 end
 
 
