@@ -11,7 +11,7 @@
 %    4     | SmartBAN                               | 128
 %    5     | Unkwnown                               | 255
 
-function creatingTrainingImages(numFrame, label, sr, imageSize)
+function creatingTrainingImages(numFrame, pixelValue, sr, imageSize)
 % CREATINGTRAININGIMAGES Generates and saves labeled spectrogram images for training.
 %
 %   creatingTrainingImages(numFrame, label, sr, imageSize) generates
@@ -30,29 +30,27 @@ function creatingTrainingImages(numFrame, label, sr, imageSize)
 %       None. The function saves image files to disk.
 
     close all; 
-    numberOfLabels = 6;
-    sr = 20e6;
-    imageSize = {[128, 128]};
-    linSpace = linspace(0,256, numberOfLabels);
+    sr = 20e6;  % Override for test
+    imageSize = {[128, 128]};  %Override for test
     pixelValues = containers.Map(...
         {'WLAN', 'ZigBee', 'Bluetooth', 'SmartBAN'}, ...
-        [linSpace(2), linSpace(3), linSpace(5), linSpace(9)]);  % Assign pixel values per label
+        [16, 32, 64, 128]);  % Override for test
 
     % Create output directories for each image size
     for index = 1:length(imageSize)
         imgSize = imageSize{index};
         folderName = sprintf('%dx%d', imgSize(1), imgSize(2));
-        dirName = fullfile('trainingImages_Giacomo', folderName);
+        dirName = fullfile('trainingImages', folderName);
         if ~exist(dirName, 'dir')
             mkdir(dirName);
         end
     end
     
-    idxFrame = 3000;
-    numFrame = 11e3;  % Override for test/debug
+    idxFrame = 0;
+    numFrame = 2;  % Override for test/debug
 
     % Class mixture probabilities: more likely to have 1 signal
-    weights = [0.2 0.2 0.3 0.3];    
+    weights = [0.3 0.3 0.2 0.2];  
     possibleCombinations = [1 2 3 4];
 
     while idxFrame < numFrame
@@ -95,9 +93,9 @@ function creatingTrainingImages(numFrame, label, sr, imageSize)
         [~, spectrogramTot] = createSpectrogram(mixedSignal, sr, imageSize);
 
         % Save the final spectrogram and mask
-        overlapLabelledImages(data_tot, idxFrame, dirName, labels, spectrogramTot);
+        overlapLabelledImages(data_tot, idxFrame, dirName, labels, spectrogramTot, pixelValues);
 
-        pause(1.5);
+        pause();
     end
 end
 
@@ -144,7 +142,7 @@ function [P, I] = createSpectrogram(waveform, sr, imageSize)
     % Convert the image in RGB form
     I = im2uint8(flipud(ind2rgb(im, parula(colormap_resolution))));  % RGB flip
     
-    %imshow(I);  % Per debug
+    imshow(I);  % Per debug
 
 end
 
@@ -195,48 +193,52 @@ function data = labellingImage(P_dB, label, pixelValues, imageSize)
     %title('Spectrogram Mask');
 end
 
-
-function overlapLabelledImages(data, idxFrame, dir, labels, spectrogram)
-% OVERLAPLABELLEDIMAGES Merges multiple labeled masks and saves the result.
+function overlapLabelledImages(data, idxFrame, dir, labels, spectrogram, label_map)
+% OVERLAPLABELLEDIMAGES Assigns unique label values based on priority, avoiding overlaps.
 %
-%   overlapLabelledImages(data, idxFrame, dir, labels, spectrogram) sums
-%   multiple label masks and stores the output as both .mat and .png files.
+%   Each pixel is assigned a single class value. If there were overlapped signals, the 
+%   labels follow this priority order:
+%   BT > SmartBAN > ZigBee > WLAN > AWGN (0)
 %
 %   Inputs:
-%       data       - (3D matrix) Stack of individual binary label masks.
-%       idxFrame   - (integer)   Index of the current image frame.
-%       dir        - (string)    Path to the output directory.
-%       labels     - (cell)      Cell array of string labels used.
-%       spectrogram - (image)    Final spectrogram image to be saved.
+%       data        - (MxNxL) 3D binary mask (L = number of labels)
+%       idxFrame    - (int)   Frame index
+%       dir         - (char)  Output directory
+%       labels      - (cell)  Cell array of label names, e.g., {'WLAN', ...}
+%       spectrogram - (image) Spectrogram image to be saved
+%       label_map   - (containers.Map) Mapping from label names (e.g., 'WLAN') to pixel values
+%                                     e.g., label_map('WLAN') = 16
 %
-%   Outputs:
-%       None. Files are saved on disk.
+%   Output:
+%       Saves 'data_final' (uint8) and the spectrogram image.
 
-   % Identify the pixels where all layers (across 3rd dim) are equal
-    equal_vals = all(data == data(:,:,1), 3);  % MxN logical array: true where all planes are equal
+    % Define fixed label values and priorities
+    priority_order = {"Bluetooth", "SmartBAN", "ZigBee", "WLAN"};  % from highest to lowest
     
-    % Compute the sum across the 3rd dimension
-    data_sum = sum(data, 3);  % MxN matrix: sum of values across all layers
-    
-    % Initialize the final data with the summed values
-    data_final = data_sum;
-    
-    % Overwrite the positions where all planes were equal, using the value from the first plane
-    tmp = data(:,:,1);
-    data_final(equal_vals) = tmp(equal_vals);
-    
-    % Convert the final matrix to uint8
-    data_final = uint8(data_final);
+    [M, N, ~] = size(data);
+    data_final = zeros(M, N, 'uint8');  % Start with AWGN everywhere (value 0)
 
-    label = strjoin(labels', '+');
-    filename = label + '_frame_' + num2str(idxFrame);
+    for i = 1:length(priority_order)
+        label = priority_order{i};
+        idx = find(strcmp(labels, label));
+        if ~isempty(idx)
+            for ii = 1:numel(idx)
+                mask = data(:,:,idx(ii));
+                to_assign = (data_final == 0) & (mask ~= 0);  % assign only if not yet labeled
+                data_final(to_assign) = label_map(label);
+            end
+            
+        end
+    end
+
+    % Save label matrix and spectrogram
+    label_combination = strjoin(labels', '+');
+    filename = num2str(idxFrame) + "_" + label_combination;
     fname = fullfile(dir, filename);
-    save(char(fname + ".mat"), 'data_final');
-
-    imwrite(spectrogram, char(fname + "_spectogram.png"));
-    idxFrame
+    
+    save(char(fname + "_frame.mat"), 'data_final');
+    imwrite(spectrogram, char(fname + "_spectrogram.png"));
 end
-
 
 function [noisyWf, wfFin, label] = generateWaveform(numOfSignal)
 % GENERATEWAVEFORM Creates synthetic waveforms for one of the three signal types.
