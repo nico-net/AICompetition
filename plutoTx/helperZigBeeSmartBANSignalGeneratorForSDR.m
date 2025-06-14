@@ -25,29 +25,32 @@ function helperZigBeeSmartBANSignalGeneratorForSDR(tx, frameDuration, sr, imageS
     if ~iscell(imageSize) || numel(imageSize) ~= 1 && numel(imageSize) ~= 2
         error('imageSize must be a cell array with 1 or 2 elements.');
     end
-    if ~isscalar(carrierFrequency) || ~isnumeric(carrierFrequency) || carrierFrequency <= 0
-        error('carrierFrequency must be a positive numeric scalar.');
+    if ~isnumeric(carrierFrequency) || any(carrierFrequency <= 0)
+    error('carrierFrequency must be a numeric vector with all positive values.');
     end
+
 
     close all;  % Close all figures to keep UI clean
 
-    transmissionProbability = 0.2;  % Probability to transmit a signal
+    transmissionProbability = 1;  % Probability to transmit a signal
     u = rand();  % Generate a random number between 0 and 1
-
+    
     if u < transmissionProbability
         % Randomly select signal type: 1 for ZigBee, 2 for SmartBAN
         typeOfSignal = randi([1, 2]);
 
+        centFreq = carrierFrequency(typeOfSignal);
         % Generate waveform for selected signal type
         wfClean = generateWaveform(typeOfSignal, frameDuration, sr);
 
         % Generate and display spectrogram of the waveform
-        createSpectrogram(wfClean, sr, imageSize, carrierFrequency, frameDuration);
+        createSpectrogram(wfClean, sr, imageSize, centFreq, frameDuration);
 
         % Normalize waveform amplitude to avoid saturation on PlutoSDR
         wfCleanNorm = wfClean / max(abs(wfClean));
-
+        
         % Transmit normalized waveform via PlutoSDR
+        tx.CenterFrequency = centFreq;
         tx(wfCleanNorm);
     else
         fprintf('Sleep mode!\n');

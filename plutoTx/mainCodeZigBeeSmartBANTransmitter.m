@@ -6,6 +6,9 @@ try
     frameDuration = 20e-3;      % Frame duration in seconds
     pauseBetweenFrames = 2;     % Pause between transmissions (seconds)
 
+    possibleCarrierFrequencies = linspace(2.41e9, 2.47e9, 20);
+    carrierFrequency = possibleCarrierFrequencies(randi(20,[1,2]));
+
     % --- SDR TRANSMITTER INITIALIZATION ---
     tx = sdrtx('Pluto', ...
         'BasebandSampleRate', sr, ...
@@ -14,9 +17,9 @@ try
     % --- TRANSMISSION LOOP ---
     while true
         % Randomize center frequency
-        possibleCarrierFrequencies = linspace(2.41e9, 2.47e9, 100);
-        carrierFrequency = possibleCarrierFrequencies(randi(100));
-        tx.CenterFrequency = carrierFrequency;
+        %possibleCarrierFrequencies = linspace(2.41e9, 2.47e9, 100);
+        %carrierFrequency = possibleCarrierFrequencies(randi(100));
+        %tx.CenterFrequency = carrierFrequency;
 
         % Generate waveform and transmit
         helperZigBeeSmartBANSignalGeneratorForSDR(tx, frameDuration, sr, imageSize, carrierFrequency);
