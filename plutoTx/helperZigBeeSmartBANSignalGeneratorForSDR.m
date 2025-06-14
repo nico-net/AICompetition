@@ -1,42 +1,59 @@
 function helperZigBeeSmartBANSignalGeneratorForSDR(tx, frameDuration, sr, imageSize, carrierFrequency)
-% helperZigBeeSmartBANSignalGeneratorForSDR   SDR signal generator for ZigBee and SmartBAN
+% helperZigBeeSmartBANSignalGeneratorForSDR   Generate and transmit ZigBee or SmartBAN signals using PlutoSDR
 %
-%   This function randomly decides whether to transmit a signal or stay idle.
-%   If transmission occurs, it generates either a ZigBee or SmartBAN signal,
-%   creates its spectrogram, and transmits it via the provided PlutoSDR transmitter.
+%   This function randomly decides whether to transmit a signal or remain idle.
+%   If transmission occurs, it generates either a ZigBee or SmartBAN waveform,
+%   plots its spectrogram, normalizes it, and sends it to the PlutoSDR transmitter.
 %
 %   Inputs:
-%       tx             - PlutoSDR transmitter object
-%       frameDuration  - Total duration of the generated frame (s)
-%       sr             - Sampling rate (Hz)
-%       imageSize      - Cell array {rows, columns} defining image dimensions
-%       carrierFrequency - Carrier frequency used (Hz)
+%       tx               - PlutoSDR transmitter System object
+%       frameDuration    - Duration of the generated frame in seconds (positive scalar)
+%       sr               - Sampling rate in Hz (positive scalar)
+%       imageSize        - Cell array specifying spectrogram image size {rows, cols}
+%       carrierFrequency - Carrier frequency in Hz (positive scalar)
 
-    close all;
+    % --- Input validation ---
+    if ~isa(tx, 'matlab.system.System') && ~isa(tx, 'comm.SDRTxPluto')
+        error('tx must be a PlutoSDR transmitter System object or a function handle.');
+    end
+    if ~isscalar(frameDuration) || ~isnumeric(frameDuration) || frameDuration <= 0
+        error('frameDuration must be a positive numeric scalar.');
+    end
+    if ~isscalar(sr) || ~isnumeric(sr) || sr <= 0
+        error('sr (sample rate) must be a positive numeric scalar.');
+    end
+    if ~iscell(imageSize) || numel(imageSize) ~= 1 && numel(imageSize) ~= 2
+        error('imageSize must be a cell array with 1 or 2 elements.');
+    end
+    if ~isscalar(carrierFrequency) || ~isnumeric(carrierFrequency) || carrierFrequency <= 0
+        error('carrierFrequency must be a positive numeric scalar.');
+    end
 
-    % Transmission probability
-    transmissionProbability = 0.2; 
-    u = rand(); % Generate random number between 0 and 1
+    close all;  % Close all figures to keep UI clean
+
+    transmissionProbability = 0.2;  % Probability to transmit a signal
+    u = rand();  % Generate a random number between 0 and 1
 
     if u < transmissionProbability
-        % Randomly select type of signal: 1=ZigBee, 2=SmartBAN
-        typeOfSignal = randi([1,2]); 
-        
-        % Generate waveform
+        % Randomly select signal type: 1 for ZigBee, 2 for SmartBAN
+        typeOfSignal = randi([1, 2]);
+
+        % Generate waveform for selected signal type
         wfClean = generateWaveform(typeOfSignal, frameDuration, sr);
-        
-        % Generate and plot spectrogram
+
+        % Generate and display spectrogram of the waveform
         createSpectrogram(wfClean, sr, imageSize, carrierFrequency, frameDuration);
-        
-        % Normalize for PlutoSDR transmission
+
+        % Normalize waveform amplitude to avoid saturation on PlutoSDR
         wfCleanNorm = wfClean / max(abs(wfClean));
-        
-        % Transmit over PlutoSDR
+
+        % Transmit normalized waveform via PlutoSDR
         tx(wfCleanNorm);
     else
-        fprintf("Sleep mode!\n");
+        fprintf('Sleep mode!\n');
     end
 end
+
 
 
 
@@ -67,10 +84,10 @@ function wfFin = generateWaveform(numOfSignal, frameDuration, sr)
         case 1  % ZigBee
             spc = 4; % Samples per chip
             numPackets = randi(3); % Random number of ZigBee packets
-            wfFin = helperZigBeePluto(spc, numPackets, frameDuration, sr);
+            wfFin = helperZigBeeSDR(spc, numPackets, frameDuration, sr);
 
         case 2  % SmartBAN
-            wfFin = helperSmartBANpluto(sr, frameDuration);
+            wfFin = helperSmartBANSDR(sr, frameDuration);
     end
 end
 
