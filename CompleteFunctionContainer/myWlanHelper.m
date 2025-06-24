@@ -1,4 +1,4 @@
-function [noisyWf, wfFin] = myWlanHelper(centerFreq,ChannelType)
+function [noisyWf, wfFin] = myWlanHelper(centerFreq,ChannelType, txPower)
 %myWlanHelper Summary of this function goes here
 %   Detailed explanation goes here
 
@@ -24,6 +24,11 @@ numPackets = timeSpan/(packetDuration+idleTime);
 
 wf = wlanWaveformGenerator(randi([0 1], wlanCfg.getPSDULength*octetLength, 1), wlanCfg, ...
     "NumPackets", numPackets, "IdleTime", idleTime);
+
+% adapting transmitting power
+txPower_W = 10^((txPower - 30)/10); %in Watt
+scalingFactor = sqrt(txPower_W);
+wf = scalingFactor * wf;
 
 
 switch ChannelType

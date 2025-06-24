@@ -49,9 +49,9 @@ function creatingTrainingImages(numFrame, pixelValue, sr, imageSize)
     numFrame = 2;  % Override for test/debug
 
     % Class mixture probabilities: more likely to have 1 signal
-    weights = [0.3 0.3 0.2 0.2];  
+    weights = [0.2 0.25 0.3 0.25];  
     possibleCombinations = [1 2 3 4];
-    for snr = 0:5:15
+    for snr = 0:1:15
         fprintf("Current SNR = %d dB\n", snr);
         idxFrame = 0;
         while idxFrame < numFrame
@@ -64,15 +64,12 @@ function creatingTrainingImages(numFrame, pixelValue, sr, imageSize)
     
             % Randomly select how many signals to mix (1, 2, 3 or 4)
             numSignals = randsample(possibleCombinations, 1, true, weights);
-            numSignals = 4;
             labels = [];
                     
-            txMax = 0;
             % Generate synthetic signals
             for iter = 1:numSignals
                 type_signal = randi(4);  % 1=ZigBee, 2=WLAN, 3=Bluetooth 4 = SmartBAN
-                [noisyWaveform, wfClean, label, txPower] = generateWaveform(type_signal);
-                txMax = max(txMax, txPower);
+                [noisyWaveform, wfClean, label] = generateWaveform(type_signal);
                 labels = cat(1, labels, label);
                 waveformsClean = cat(2, waveformsClean, wfClean);
                 waveforms = cat(2, waveforms, noisyWaveform);
@@ -80,31 +77,33 @@ function creatingTrainingImages(numFrame, pixelValue, sr, imageSize)
     
             % Array of all the label matrices 
             data_tot = [];
-    
+            P_rx_arr = [];
             % Generate labeled spectrogram masks
             for i = 1:size(waveformsClean, 2)
                 label = labels(i, :);
                 waveform = waveformsClean(:, i);
-                [spectrogram, ~] = createSpectrogram(waveform, sr, imageSize);
+                [spectrogram, ~, P_rx] = createSpectrogram(waveform, sr, imageSize);
+                pause(2);
+                close all;
+                P_rx_arr = cat(1, P_rx_arr, P_rx);
                 labeledImage = labellingImage(spectrogram, label, pixelValues, imageSize{1});
                 data_tot = cat(3, data_tot, labeledImage);
             end
-            
-            
+            [waveformsClean, noisePower] = adjustRxPower(waveformsClean, snr, P_rx_arr);
             % Mix signals and create final spectrogram
-            mixedSignal = mySignalMixer(waveformsClean, 20e-3, txMax, snr);
-            %mixedSignal = scalingPower(mixedSignal);
+            mixedSignal = mySignalMixer(waveformsClean, 20e-3, noisePower);
             [~, spectrogramTot] = createSpectrogram(mixedSignal, sr, imageSize);
             % Save the final spectrogram and mask
             overlapLabelledImages(data_tot, idxFrame, dirName, labels, spectrogramTot, pixelValues);
             pause();
+            fprintf("\n\n\n");
         end
     end
 end
 
 
 
-function [P, I] = createSpectrogram(waveform, sr, imageSize)
+function [P, I, P_rx] = createSpectrogram(waveform, sr, imageSize)
 % CREATESPECTROGRAM Computes the spectrogram of a waveform and returns it as an image.
 %
 %   [P, I] = createSpectrogram(waveform, sr, imageSize) returns both the numeric
@@ -125,16 +124,18 @@ function [P, I] = createSpectrogram(waveform, sr, imageSize)
     db_max = -50;
     Nfft = 4096;
     window = hann(256);
-    overlap = 10;
+    overlap = 100;
     colormap_resolution = 256;
 
-    [~, ~, ~, P] = spectrogram(waveform, window, overlap, Nfft, sr, 'centered', 'psd');
+    P_rx = 10*log10(max(abs(waveform).^2));
 
-    P = 10 * log10(abs(P') + eps);  % Conversione in dB
+    [~, ~, ~, P] = spectrogram(waveform, window, overlap, Nfft, sr, 'centered', 'psd');
     
+    P = 10 * log10(abs(P') + eps);  % Conversione in dB
    
     % Clipping of outliers
     P_db_clipped = min(max(P, db_min), db_max);
+    
     
     % Normalization with respect to the fixed scale
     P_norm = (P_db_clipped - db_min) / (db_max - db_min);
@@ -146,6 +147,7 @@ function [P, I] = createSpectrogram(waveform, sr, imageSize)
     I = im2uint8(flipud(ind2rgb(im, parula(colormap_resolution))));  % RGB flip
 
     %for debug
+    figure;
     imshow(I);  % for debug
     colormap(parula(colormap_resolution));
     colorbar('Ticks', linspace(0,1,8), ...
@@ -249,7 +251,7 @@ function overlapLabelledImages(data, idxFrame, dir, labels, spectrogram, label_m
     imwrite(spectrogram, char(fname + "_spectrogram.png"));
 end
 
-function [noisyWf, wfFin, label, txPower] = generateWaveform(numOfSignal)
+function [noisyWf, wfFin, label] = generateWaveform(numOfSignal)
 % GENERATEWAVEFORM Creates synthetic waveforms for one of the three signal types.
 %
 %   [noisyWf, wfFin, label] = generateWaveform(numOfSignal) generates a noisy
@@ -368,4 +370,40 @@ function resetWLANFrequencies()
 % frequency reuse across frames.
 
     clear getStaticWLANFrequency
+end
+
+
+function [waveforms_scaled, noise_power_lin] = adjustRxPower(waveforms, snr_dB, P_rx_arr)
+% ADJUSTRXPOWER  Rescale a bank of received waveforms so that their
+% peak power meets a target SNR with respect to a fixed AWGN level.
+%
+% Inputs:
+%   waveforms   – Matrix whose columns are signals to be scaled (complex)
+%   snr_dB      – Desired SNR (dB) referenced to AWGN noise_power_dB
+%   P_rx_arr    – Vector of received-power estimates (dB) for each column
+%
+% Outputs:
+%   waveforms_scaled – Waveforms after amplitude scaling
+%   noise_power_lin  – Noise power in linear units (same units as signals)
+
+
+    % --- Fixed AWGN noise floor -------------------------------------------------
+    noise_power_dB  = -30;                       % Noise power in dB (measured with Adalm-Pluto)
+    noise_power_lin = 10^(noise_power_dB / 10);  % Convert dB → linear
+
+    % --- Peak-power of the received signals -------------------------------------
+    P_rx_max = max(P_rx_arr);                    % Highest power across signals (dB)
+
+    % --- Target signal power to achieve the desired SNR -------------------------
+    
+    P_rx_dB = snr_dB + noise_power_dB;           % Target received power (dB)
+
+    % --- Compute amplitude scaling factor ---------------------------------------
+    % Scaling is done in amplitude: 20 log10(scale) = P_rx_target_dB – P_rx_max
+    fprintf("P_rx_dB = %.2f  |  P_rx_max = %.2f\n", P_rx_dB, P_rx_max);
+    scalingFactor = sqrt( 10^((P_rx_dB - P_rx_max) / 10) );
+    fprintf("Scaling factor = %.4f (linear amplitude)\n", scalingFactor);
+
+    % --- Apply the scaling factor to all waveforms ------------------------------
+    waveforms_scaled = waveforms * scalingFactor;
 end

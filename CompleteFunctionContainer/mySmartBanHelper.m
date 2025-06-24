@@ -1,4 +1,4 @@
-function [noisyWf, finWf] = mySmartBanHelper(Channel, centerFreq)
+function [noisyWf, finWf] = mySmartBanHelper(Channel, centerFreq, txPower)
 
 
 
@@ -7,6 +7,9 @@ dataBeacon = randi([0 1], 248, 1);
 ISMSstart = 2.402e9;
 
 fOff = comm.PhaseFrequencyOffset;
+
+txPower_W = 10^((txPower - 30)/10);
+scalingFactor = sqrt(txPower_W);
 
 
 timeDuration = 0.02; %s
@@ -56,6 +59,8 @@ switch Channel
 end
 
 beaconSignal = modulator(dataBeacon);
+% scaling power
+beaconSignal = scalingFactor * beaconSignal;
 
 beaconchan = comm.RicianChannel;
         beaconchan.SampleRate = sampleRate;
@@ -83,12 +88,12 @@ else
     while (length(finWf) < timeDuration * sampleRate)
         dataPacket = randi([0 1], dataPacketLength, 1);
         if (rand() > currentMissProb)
-            packetSignal = modulator(dataPacket) * 0.1;
+            packetSignal = modulator(dataPacket) * 0.1 * scalingFactor;
             packetSignal = chan(packetSignal);
             finWf = [finWf; packetSignal; zeros((slotDuration - ifs * 2 - ackPacketLength/bitRate - dataPacketLength) * sampleRate/bitRate, 1)];
             finWf = [finWf; zeros(floor(ifs*sampleRate), 1)];
             dataAck = randi([0 1], ackPacketLength, 1);
-            ackSignal = modulator(dataAck) * 0.1;
+            ackSignal = modulator(dataAck) * 0.1 * scalingFactor;
             ackSignal = chan(ackSignal);
             finWf = [finWf; ackSignal; zeros(floor(ifs * sampleRate), 1)];
             currentMissProb = currentMissProb + 0.05;

@@ -1,4 +1,4 @@
-function [noisyWf, wfFin] = myZigbEEHelper(spc,numPackets, centerFreq, ChannelType)
+function [noisyWf, wfFin] = myZigbEEHelper(spc,numPackets, centerFreq, ChannelType, txPower)
 %UNTITLED Summary of this function goes here
 %   Detailed explanation goes here
 
@@ -28,6 +28,10 @@ end
 
 wf = lrwpanWaveformGenerator(randi([0 1], zbCfg.PSDULength*8, 1),zbCfg, "NumPackets", numPackets, "IdleTime", idleTime);
 
+% adapting transmitting power
+txPower_W = 10^((txPower - 30)/10); %in Watt
+scalingFactor = sqrt(txPower_W);
+wf = scalingFactor * wf;
 
 switch ChannelType
     case 'Rician'
