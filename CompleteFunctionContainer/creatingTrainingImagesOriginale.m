@@ -31,7 +31,7 @@ function creatingTrainingImages(numFrame, pixelValue, sr, imageSize)
 
     close all; 
     sr = 20e6;  % Override for test
-    imageSize = {[128, 128]};  %Override for test
+    imageSize = {[1024, 1024]};  %Override for test
     pixelValues = containers.Map(...
         {'WLAN', 'ZigBee', 'Bluetooth', 'SmartBAN'}, ...
         [16, 32, 64, 128]);  % Override for test
@@ -46,56 +46,59 @@ function creatingTrainingImages(numFrame, pixelValue, sr, imageSize)
         end
     end
     
-    idxFrame = 0;
     numFrame = 2;  % Override for test/debug
 
     % Class mixture probabilities: more likely to have 1 signal
     weights = [0.3 0.3 0.2 0.2];  
     possibleCombinations = [1 2 3 4];
-
-    while idxFrame < numFrame
-        idxFrame = idxFrame + 1;
-        waveforms = [];
-        waveformsClean = [];
-
-        % Reset available WLAN frequencies at the start of each frame
-        resetWLANFrequencies();
-
-        % Randomly select how many signals to mix (1, 2, 3 or 4)
-        numSignals = randsample(possibleCombinations, 1, true, weights);
-        labels = [];
-                
-        % Generate synthetic signals
-        for iter = 1:numSignals
-            type_signal = randi(4);  % 1=ZigBee, 2=WLAN, 3=Bluetooth 4 = SmartBAN
-            [noisyWaveform, wfClean, label] = generateWaveform(type_signal);
-            labels = cat(1, labels, label);
-            waveformsClean = cat(2, waveformsClean, wfClean);
-            waveforms = cat(2, waveforms, noisyWaveform);
+    for snr = 0:5:15
+        fprintf("Current SNR = %d dB\n", snr);
+        idxFrame = 0;
+        while idxFrame < numFrame
+            idxFrame = idxFrame + 1;
+            waveforms = [];
+            waveformsClean = [];
+    
+            % Reset available WLAN frequencies at the start of each frame
+            resetWLANFrequencies();
+    
+            % Randomly select how many signals to mix (1, 2, 3 or 4)
+            numSignals = randsample(possibleCombinations, 1, true, weights);
+            numSignals = 4;
+            labels = [];
+                    
+            txMax = 0;
+            % Generate synthetic signals
+            for iter = 1:numSignals
+                type_signal = randi(4);  % 1=ZigBee, 2=WLAN, 3=Bluetooth 4 = SmartBAN
+                [noisyWaveform, wfClean, label, txPower] = generateWaveform(type_signal);
+                txMax = max(txMax, txPower);
+                labels = cat(1, labels, label);
+                waveformsClean = cat(2, waveformsClean, wfClean);
+                waveforms = cat(2, waveforms, noisyWaveform);
+            end
+    
+            % Array of all the label matrices 
+            data_tot = [];
+    
+            % Generate labeled spectrogram masks
+            for i = 1:size(waveformsClean, 2)
+                label = labels(i, :);
+                waveform = waveformsClean(:, i);
+                [spectrogram, ~] = createSpectrogram(waveform, sr, imageSize);
+                labeledImage = labellingImage(spectrogram, label, pixelValues, imageSize{1});
+                data_tot = cat(3, data_tot, labeledImage);
+            end
+            
+            
+            % Mix signals and create final spectrogram
+            mixedSignal = mySignalMixer(waveformsClean, 20e-3, txMax, snr);
+            %mixedSignal = scalingPower(mixedSignal);
+            [~, spectrogramTot] = createSpectrogram(mixedSignal, sr, imageSize);
+            % Save the final spectrogram and mask
+            overlapLabelledImages(data_tot, idxFrame, dirName, labels, spectrogramTot, pixelValues);
+            pause();
         end
-
-        % Array of all the label matrices 
-        data_tot = [];
-
-        % Generate labeled spectrogram masks
-        for i = 1:size(waveformsClean, 2)
-            label = labels(i, :);
-            waveform = waveformsClean(:, i);
-            [spectrogram, ~] = createSpectrogram(waveform, sr, imageSize);
-            labeledImage = labellingImage(spectrogram, label, pixelValues, imageSize{1});
-            data_tot = cat(3, data_tot, labeledImage);
-        end
-        
-        
-        % Mix signals and create final spectrogram
-        mixedSignal = mySignalMixer(waveforms);
-        mixedSignal = scalingPower(mixedSignal);
-        [~, spectrogramTot] = createSpectrogram(mixedSignal, sr, imageSize);
-
-        % Save the final spectrogram and mask
-        overlapLabelledImages(data_tot, idxFrame, dirName, labels, spectrogramTot, pixelValues);
-
-        pause();
     end
 end
 
@@ -138,11 +141,17 @@ function [P, I] = createSpectrogram(waveform, sr, imageSize)
     
     % Mapping on a 256-value gray scale
     im = imresize(im2uint8(P_norm), imageSize{1}, "nearest");
-    
+
     % Convert the image in RGB form
     I = im2uint8(flipud(ind2rgb(im, parula(colormap_resolution))));  % RGB flip
-    
-    imshow(I);  % Per debug
+
+    %for debug
+    imshow(I);  % for debug
+    colormap(parula(colormap_resolution));
+    colorbar('Ticks', linspace(0,1,8), ...
+             'TickLabels', linspace(db_min, db_max, 8));  % scale colorbar to dB range
+    title('Power (dB)');
+    axis image off;
 
 end
 
@@ -240,7 +249,7 @@ function overlapLabelledImages(data, idxFrame, dir, labels, spectrogram, label_m
     imwrite(spectrogram, char(fname + "_spectrogram.png"));
 end
 
-function [noisyWf, wfFin, label] = generateWaveform(numOfSignal)
+function [noisyWf, wfFin, label, txPower] = generateWaveform(numOfSignal)
 % GENERATEWAVEFORM Creates synthetic waveforms for one of the three signal types.
 %
 %   [noisyWf, wfFin, label] = generateWaveform(numOfSignal) generates a noisy
@@ -270,7 +279,10 @@ function [noisyWf, wfFin, label] = generateWaveform(numOfSignal)
             numPackets = randi(3);
             centerFreq = 2405e6 + 5e6 * (randi(16) - 11);
             channelType = randsample({'Rician', 'Rayleigh', 'AWGN'}, 1);
-            [noisyWf, wfFin] = myZigbEEHelper(spc, numPackets, centerFreq, channelType{1});
+            txPowerArr = [-3, 0, 8]; %in dBm
+            weights = [0.15 0.75 0.1];  
+            txPower = randsample(txPowerArr, 1, true, weights);
+            [noisyWf, wfFin] = myZigbEEHelper(spc, numPackets, centerFreq, channelType{1}, txPower);
             label = "ZigBee";
 
         case 2  % WLAN
@@ -279,11 +291,13 @@ function [noisyWf, wfFin, label] = generateWaveform(numOfSignal)
                 label = "WLAN";
             catch ME
                 warning(ME.identifier,'%s', ME.message);
-                label = "Unkown";
+                label = "Unknown";
                 return;
             end
+
+            txPower = ((rand()- 1/2)*5) + 20.5; %in dBm [18; 23] dBm
             channelType = randsample({'Rician', 'Rayleigh'}, 1);
-            [noisyWf, wfFin] = myWlanHelper(choosenCF, channelType{1});
+            [noisyWf, wfFin] = myWlanHelper(choosenCF, channelType{1}, txPower);
 
         case 3  % Bluetooth
             channelType = randsample({'Rician', 'Rayleigh'}, 1);
@@ -292,9 +306,12 @@ function [noisyWf, wfFin, label] = generateWaveform(numOfSignal)
                'EV3', 'EV4', 'EV5', ...
                '2-DH1', '2-DH3', '2-DH5', '3-DH1', '3-DH3', '3-DH5', ...
                '2-EV3', '2-EV5', '3-EV3', '3-EV5'};
-
+            
+            txPowerArr = [0, 4, 20]; %in dBm
+            weights = [0.03 0.94 0.03];  
+            txPower = randsample(txPowerArr, 1, true, weights);
             packetType = packetTypes{randi(length(packetTypes))};
-            [noisyWf, wfFin] = myBluetoothHelper(packetType, channelType{1});
+            [noisyWf, wfFin] = myBluetoothHelper(packetType, channelType{1}, txPower);
             label = "Bluetooth";
         
         case 4  %SmartBAN
@@ -302,10 +319,13 @@ function [noisyWf, wfFin, label] = generateWaveform(numOfSignal)
             channelType = randsample({'Rician', 'Rayleigh'}, 1);
             centerFrequency = randi([0, 39]) * 2e6;
             centerFrequency = centerFrequency + 2.402e9;
-            [noisyWf, wfFin] = mySmartBanHelper(channelType{1}, centerFrequency);
+            txPowerArr = [-20, -12, -8, 0]; %in dBm
+            weights = [0.2 0.4 0.2 0.2];  
+            txPower = randsample(txPowerArr, 1, true, weights);  %in dBm
+            [noisyWf, wfFin] = mySmartBanHelper(channelType{1}, centerFrequency, txPower);
     end
-
-    clearvars -except noisyWf wfFin label
+    fprintf("Tx Power of %s: %f dBm\n", label, txPower);
+    clearvars -except noisyWf wfFin label txPower
 end
 
 
