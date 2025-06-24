@@ -1,15 +1,3 @@
-% =============================================
-%  Signal Combination → Linear Label Mapping (6 levels)
-% =============================================
-%
-%  Bitmask | Signal Combination                     | Label
-%  --------+----------------------------------------+--------
-%    0     | AWGN                                   | 0
-%    1     | WLAN                                   | 16
-%    2     | Bluetooth                              | 32
-%    3     | ZigBee                                 | 64
-%    4     | SmartBAN                               | 128
-%    5     | Unkwnown                               | 255
 
 function creatingTrainingImages(numFrame, pixelValue, sr, imageSize)
 % CREATINGTRAININGIMAGES Generates and saves labeled spectrogram images for training.
@@ -28,9 +16,22 @@ function creatingTrainingImages(numFrame, pixelValue, sr, imageSize)
 %
 %   Output:
 %       None. The function saves image files to disk.
+%
+% =============================================
+%  Signal Combination → Linear Label Mapping (6 levels)
+% =============================================
+%
+%  Bitmask | Signal Combination                     | Label
+%  --------+----------------------------------------+--------
+%    0     | AWGN                                   | 0
+%    1     | WLAN                                   | 16
+%    2     | Bluetooth                              | 32
+%    3     | ZigBee                                 | 64
+%    4     | SmartBAN                               | 128
+%    5     | Unkwnown                               | 255
 
     close all; 
-    sr = 20e6;  % Override for test
+    sr = 80e6;  % Override for test
     imageSize = {[1024, 1024]};  %Override for test
     pixelValues = containers.Map(...
         {'WLAN', 'ZigBee', 'Bluetooth', 'SmartBAN'}, ...
@@ -46,12 +47,12 @@ function creatingTrainingImages(numFrame, pixelValue, sr, imageSize)
         end
     end
     
-    numFrame = 2;  % Override for test/debug
+    numFrame = 1200;  % Override for test/debug
 
     % Class mixture probabilities: more likely to have 1 signal
     weights = [0.2 0.25 0.3 0.25];  
     possibleCombinations = [1 2 3 4];
-    for snr = 0:1:15
+    for snr = 0:1:35
         fprintf("Current SNR = %d dB\n", snr);
         idxFrame = 0;
         while idxFrame < numFrame
@@ -82,21 +83,21 @@ function creatingTrainingImages(numFrame, pixelValue, sr, imageSize)
             for i = 1:size(waveformsClean, 2)
                 label = labels(i, :);
                 waveform = waveformsClean(:, i);
-                [spectrogram, ~, P_rx] = createSpectrogram(waveform, sr, imageSize);
-                pause(2);
-                close all;
+                [P_matrix, ~, P_rx] = createSpectrogram(waveform, sr, imageSize);
                 P_rx_arr = cat(1, P_rx_arr, P_rx);
-                labeledImage = labellingImage(spectrogram, label, pixelValues, imageSize{1});
+                labeledImage = labellingImage(P_matrix, label, pixelValues, imageSize{1});
                 data_tot = cat(3, data_tot, labeledImage);
             end
-            [waveformsClean, noisePower] = adjustRxPower(waveformsClean, snr, P_rx_arr);
+            [waveformsClean, noisePower] = adjustRxPower(waveformsClean, snr, P_rx_arr, labels);
             % Mix signals and create final spectrogram
             mixedSignal = mySignalMixer(waveformsClean, 20e-3, noisePower);
             [~, spectrogramTot] = createSpectrogram(mixedSignal, sr, imageSize);
+            pause(4);
             % Save the final spectrogram and mask
-            overlapLabelledImages(data_tot, idxFrame, dirName, labels, spectrogramTot, pixelValues);
-            pause();
+            overlapLabelledImages(data_tot, idxFrame, dirName, labels, spectrogramTot, pixelValues, snr, numFrame);
             fprintf("\n\n\n");
+            pause();
+            close all
         end
     end
 end
@@ -197,14 +198,14 @@ function data = labellingImage(P_dB, label, pixelValues, imageSize)
     
     data = imresize(data, imageSize, "nearest");
 
-    im = imresize(im2uint8(rescale(data)), imageSize, "nearest");
+    %im = imresize(im2uint8(rescale(data)), imageSize, "nearest");
 
     %figure;
     %imshow(im);
     %title('Spectrogram Mask');
 end
 
-function overlapLabelledImages(data, idxFrame, dir, labels, spectrogram, label_map)
+function overlapLabelledImages(data, idxFrame, dir, labels, spectrogram, label_map, snr, numFramesPerSnr)
 % OVERLAPLABELLEDIMAGES Assigns unique label values based on priority, avoiding overlaps.
 %
 %   Each pixel is assigned a single class value. If there were overlapped signals, the 
@@ -244,7 +245,8 @@ function overlapLabelledImages(data, idxFrame, dir, labels, spectrogram, label_m
 
     % Save label matrix and spectrogram
     label_combination = strjoin(labels', '+');
-    filename = num2str(idxFrame) + "_" + label_combination;
+    filename = num2str(idxFrame + snr*numFramesPerSnr) + "_" + ...
+                        label_combination + "_" + snr + "dB";
     fname = fullfile(dir, filename);
     
     save(char(fname + "_frame.mat"), 'data_final');
@@ -321,8 +323,9 @@ function [noisyWf, wfFin, label] = generateWaveform(numOfSignal)
             channelType = randsample({'Rician', 'Rayleigh'}, 1);
             centerFrequency = randi([0, 39]) * 2e6;
             centerFrequency = centerFrequency + 2.402e9;
-            txPowerArr = [-20, -12, -8, 0]; %in dBm
-            weights = [0.2 0.4 0.2 0.2];  
+            txPowerArr = [0, 4, 20]; %in dBm
+            weights = [0.03 0.94 0.03];  
+            %weights = [0.2 0.4 0.2 0.2];  
             txPower = randsample(txPowerArr, 1, true, weights);  %in dBm
             [noisyWf, wfFin] = mySmartBanHelper(channelType{1}, centerFrequency, txPower);
     end
@@ -373,7 +376,7 @@ function resetWLANFrequencies()
 end
 
 
-function [waveforms_scaled, noise_power_lin] = adjustRxPower(waveforms, snr_dB, P_rx_arr)
+function [waveforms_scaled, noise_power_lin] = adjustRxPower(waveforms, snr_dB, P_rx_arr, labels)
 % ADJUSTRXPOWER  Rescale a bank of received waveforms so that their
 % peak power meets a target SNR with respect to a fixed AWGN level.
 %
@@ -404,6 +407,19 @@ function [waveforms_scaled, noise_power_lin] = adjustRxPower(waveforms, snr_dB, 
     scalingFactor = sqrt( 10^((P_rx_dB - P_rx_max) / 10) );
     fprintf("Scaling factor = %.4f (linear amplitude)\n", scalingFactor);
 
+    
+    % -- logical masks --------------------------------------------------------
+    zigbeeMask = labels == "ZigBee";
+    btMask     = labels == "Bluetooth" | labels == "SmartBAN";
+    wlanMask   = labels == "WLAN";
+    % -- scaling factors ------------------------------------------------------
+    scaleMask               = ones(size(labels));
+    if all(wlanMask == 0) && snr_dB >= 15
+        scaleMask(zigbeeMask)   = 1/5;                  % Zigbee → ×1/5
+        scaleMask(btMask)       = 1/10;                 % Bluetooth or SmartBAN → ×1/10
+    end
+    % -- apply scaling --------------------------------------------------------
+    scalingFactorArr = scalingFactor * scaleMask;     % update in-place
     % --- Apply the scaling factor to all waveforms ------------------------------
-    waveforms_scaled = waveforms * scalingFactor;
+    waveforms_scaled = waveforms .* (scalingFactorArr');
 end
