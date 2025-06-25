@@ -1,4 +1,4 @@
-function [noisyWf,finWf] = myBluetoothHelper(packetType, ChannelType)
+function [noisyWf,finWf] = myBluetoothHelper(packetType, ChannelType, txPower)
 
 
 timeSimulation = 20e-3; %seconds
@@ -59,10 +59,15 @@ switch ChannelType
 end
 
 i = 0;
+txPower_W = 10^((txPower - 30)/10); %in Watt
+scalingFactor = sqrt(txPower_W);
+
 while (i<numSlots)
     if (rand > currentRandomProfile)
         dataBits = randi([0 1], cfgBt.PayloadLength * octetLength, 1);
         wf = bluetoothWaveformGenerator(dataBits, cfgBt);
+        %adapting tx power
+        wf = scalingFactor * wf;
         switch ChannelType
             case 'Rician'
                 wfChan = chan(wf);
