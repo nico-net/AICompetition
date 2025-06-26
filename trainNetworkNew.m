@@ -1,5 +1,5 @@
 %% Spectrogram Segmentation using U-Net with ResNet34 Encoder
-clear; close all;clc;
+close all;clc;
 
 numClasses = 6;
 classNames = [ ...
@@ -12,11 +12,11 @@ dataFolder = fullfile(pwd,"CompleteFunctionContainer/trainingImages_Nicola/128x1
 
 
 %% STEP 1: Create Images Datastore
-%imds = imageDatastore(dataFolder, 'FileExtensions', {'.png'}, 'IncludeSubfolders', false);
-fds = fileDatastore(dataFolder, ...
-    'ReadFcn', @(x) loadPnormMat(x), ...
-    'FileExtensions', '.mat', ...
-    'IncludeSubfolders', false);
+imds = imageDatastore(dataFolder, 'FileExtensions', {'.png'}, 'IncludeSubfolders', false);
+% fds = fileDatastore(dataFolder, ...
+%     'ReadFcn', @(x) loadPnormMat(x), ...
+%     'FileExtensions', '.mat', ...
+%     'IncludeSubfolders', false);
 
 %% STEP 2: Create Custom Label Datastore for .mat Bitmask Files
 matFiles = dir(fullfile(dataFolder, '*.mat'));
@@ -28,36 +28,61 @@ pxds = pixelLabelDatastore(matPaths, ...
     FileExtensions=".mat");
 
 % Combine into pixelLabelImageDatastore
-%pximds = pixelLabelImageDatastore(imds, pxds);
-cds = combine(fds, pxds);
+pximds = pixelLabelImageDatastore(imds, pxds);
+%cds = combine(fds, pxds);
 
 
-%% STEP 3: Evaluate Class Imbalances
-tbl = countEachLabel(pxds); % pxds: pixelLabelDatastore
-imageFreq = tbl.PixelCount ./ tbl.ImagePixelCount;
-imageFreq(isnan(imageFreq)) = [];
-classWeights = median(imageFreq) ./ imageFreq;
-classWeights = classWeights/(sum(classWeights)+eps(class(classWeights)));
-if length(classWeights) < numClasses
-    classWeights = [classWeights; zeros(numClasses-length(classWeights),1)];
-end
-
-
-%% STEP 4: Split into Train, Validation and Test
+%% STEP 3: Split into Train, Validation and Test
 [imdsTrain,pxdsTrain,imdsVal,pxdsVal,imdsTest,pxdsTest] = ...
-  helperSpecSensePartitionData(fds,pxds,[70 10 20]);
+  helperSpecSensePartitionData(imds,pxds,[70 10 20]);
 cdsTrain = combine(imdsTrain,pxdsTrain);
 cdsVal = combine(imdsVal,pxdsVal);
 cdsTest = combine(imdsTest,pxdsTest);
 
+% STEP 4: Evaluate Class Imbalances
+
+tbl          = countEachLabel(pxdsTrain);             % pixelLabelDatastore
+freq         = tbl.PixelCount / sum(tbl.PixelCount);
+classWeights = median(freq) ./ freq;                  % ↑peso a classi rare
+classWeights(end) = 1e6;
+
 %% STEP 5: Define U-Net Network with ResNet34 Encoder
+clearvars -except cdsVal cdsTrain numClasses
 inputSize = [256, 256, 3];
+
+%lgraph = deeplabv3plus(inputSize, numClasses, "resnet18");
+
+
 [encoderNet, encoderOutputLayers] = ...
     pretrainedEncoderNetwork('resnet18', 4);
 lgraph = unet(inputSize, numClasses, ...
     'EncoderNetwork', encoderNet, ...
     'EncoderDepth', 4);
+
+%analyzeNetwork(lgraph)  % per vedere i nomi
+skip   = ["encoderDecoderSkipConnectionCrop4" ...
+          "encoderDecoderSkipConnectionCrop3" ...
+          "encoderDecoderSkipConnectionCrop2" ...
+          "encoderDecoderSkipConnectionCrop1"];
+
+gate  = ["Decoder-Stage-4-UpConv", ...
+         "Decoder-Stage-3-UpConv", ...
+         "Decoder-Stage-2-UpConv", ...
+         "Decoder-Stage-1-UpConv"];
+
+concat = ["encoderDecoderSkipConnectionFeatureMerge4", ...
+          "encoderDecoderSkipConnectionFeatureMerge3", ...
+          "encoderDecoderSkipConnectionFeatureMerge2", ...
+          "encoderDecoderSkipConnectionFeatureMerge1"];
+
+
+for i = 1:numel(skip)
+    lgraph = addAttentionGate(lgraph, skip(i), gate(i), concat(i), "att" + i);
+end
+
 %plot(lgraph);
+analyzeNetwork(lgraph)  % per vedere i nomi
+pause(10);
 
 %% STEP 6: Training Options
 options = trainingOptions('adam', ...
@@ -74,15 +99,15 @@ options = trainingOptions('adam', ...
     'Plots', 'training-progress', ...
     'CheckpointPath', fullfile(pwd,'savingFolder'), ... 
     'CheckpointFrequency', 1, ...
-    'ExecutionEnvironment', 'multi-gpu', ...
+    'ExecutionEnvironment', 'cpu', ...
     'Metrics','accuracy'); % Save every epoch
 
 
 %% STEP 7: Train the Network
-[net,trainInfo] = trainnet(cdsTrain, lgraph, ...
-    @(ypred,ytrue) lossFunction(ypred,ytrue,classWeights),options);
 % [net,trainInfo] = trainnet(cdsTrain, lgraph, ...
-%    "crossentropy",options);
+%     @(ypred,ytrue) lossFunction(ypred,ytrue,classWeights),options);
+[net,trainInfo] = trainnet(cdsTrain, lgraph, ...
+   "crossentropy",options);
     save(sprintf('myNet_%s', ...
         datetime('now',format='yyyy_MM_dd_HH_mm')), 'net');
     save("imdsTest", 'imdsTest');
@@ -205,4 +230,83 @@ function loss = lossFunction(ypred, ytrue, classWeights, useDice)
     % --- Final Loss ---
     alpha = 0.7 ; % Set to <1 if you want to include Dice loss
     loss = alpha * crossEntropy + (1 - alpha) * diceLoss;
+end
+
+function lgraph = addAttentionGate(lgraph, skipName, gateName, concatName, tag)
+% ADDATTENTIONGATE Adds an Attention Gate to a layer graph
+% lgraph = addAttentionGate(lgraph, skipName, gateName, concatName, tag)
+%
+% Inputs:
+% lgraph - layerGraph object to modify
+% skipName - name of the encoder skip connection layer (feature map)
+% gateName - name of the decoder feature map (query input)
+% concatName - name of the concatenation layer where attention output connects
+% tag - string tag to uniquely name new layers
+%
+% Outputs:
+% lgraph - modified layerGraph with attention gate layers and connections
+
+tag = string(tag);
+
+% Define attention gate layers
+layers = {
+    convolution2dLayer(1, 64, 'Padding', 'same', 'Name', "q_" + tag)      % query conv
+    convolution2dLayer(1, 64, 'Padding', 'same', 'Name', "k_" + tag)      % key conv  
+    additionLayer(2, 'Name', "add_" + tag)                                 % add query + key
+    reluLayer('Name', "relu_" + tag)                                       % activation
+    convolution2dLayer(1, 1, 'Padding', 'same', 'Name', "psi_" + tag)     % attention weights
+    sigmoidLayer('Name', "sig_" + tag)                                     % normalize weights
+    multiplicationLayer(2, 'Name', "mul_" + tag)                          % apply attention
+    functionLayer(@(x) x, 'Name', "gateClone_" + tag)                     % clone gate features
+};
+
+% Add all new layers to the graph
+for i = 1:numel(layers)
+    lgraph = addLayers(lgraph, layers{i});
+end
+
+% Step 1: Find and disconnect existing connections to concatName
+connections = lgraph.Connections;
+disp(connections)
+% Disconnect existing skip connection (in2)
+skipConnectionIdx = strcmp(connections.Destination, concatName + "/in2");
+if any(skipConnectionIdx)
+    srcLayer = connections.Source{skipConnectionIdx};
+    %lgraph = disconnectLayers(lgraph, srcLayer, concatName + "/in2");
+end
+
+% Disconnect existing gate connection (in1) and reconnect through clone
+gateConnectionIdx = strcmp(connections.Destination, concatName + "/in1");
+if any(gateConnectionIdx)
+    srcLayer = connections.Source{gateConnectionIdx};
+    lgraph = disconnectLayers(lgraph, srcLayer, concatName + "/in1");
+    
+    % Connect original gate source to clone, then clone to concat/in1
+    lgraph = connectLayers(lgraph, srcLayer, "gateClone_" + tag);
+    % lgraph = connectLayers(lgraph, "gateClone_" + tag, concatName + "/in1");
+end
+
+% Step 2: Create attention gate connections
+% Connect skip features to key convolution (k_)
+lgraph = connectLayers(lgraph, skipName, "k_" + tag);
+
+% Connect gate features to query convolution (q_) - use the clone to avoid cycles
+lgraph = connectLayers(lgraph, "gateClone_" + tag, "q_" + tag);
+
+% Connect query and key to addition layer
+lgraph = connectLayers(lgraph, "q_" + tag, "add_" + tag + "/in1");
+lgraph = connectLayers(lgraph, "k_" + tag, "add_" + tag + "/in2");
+
+% Connect the attention computation chain
+lgraph = connectLayers(lgraph, "add_" + tag, "relu_" + tag);
+lgraph = connectLayers(lgraph, "relu_" + tag, "psi_" + tag);
+lgraph = connectLayers(lgraph, "psi_" + tag, "sig_" + tag);
+
+% Connect skip features and attention weights to multiplication
+lgraph = connectLayers(lgraph, skipName, "mul_" + tag + "/in1");
+lgraph = connectLayers(lgraph, "sig_" + tag, "mul_" + tag + "/in2");
+
+% Step 3: Connect attention output to concatenation layer
+lgraph = connectLayers(lgraph, "mul_" + tag, concatName + "/in1");
+
 end
