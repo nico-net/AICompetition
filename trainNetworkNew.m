@@ -39,7 +39,7 @@ cdsTrain = combine(imdsTrain,pxdsTrain);
 cdsVal = combine(imdsVal,pxdsVal);
 cdsTest = combine(imdsTest,pxdsTest);
 
-% STEP 4: Evaluate Class Imbalances
+%% STEP 4: Evaluate Class Imbalances
 
 tbl          = countEachLabel(pxdsTrain);             % pixelLabelDatastore
 freq         = tbl.PixelCount / sum(tbl.PixelCount);
@@ -59,7 +59,7 @@ lgraph = unet(inputSize, numClasses, ...
     'EncoderNetwork', encoderNet, ...
     'EncoderDepth', 4);
 
-%analyzeNetwork(lgraph)  % per vedere i nomi
+% Add Attention Gate
 skip   = ["encoderDecoderSkipConnectionCrop4" ...
           "encoderDecoderSkipConnectionCrop3" ...
           "encoderDecoderSkipConnectionCrop2" ...
