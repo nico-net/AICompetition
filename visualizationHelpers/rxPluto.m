@@ -261,7 +261,7 @@ try
                            'NumberTitle', 'off', 'Position', [100, 100, 1200, 800]);
         
         % Display spectrogram with proper scaling
-        figure("Name","Prediction vs Spectrogram")
+        figure('Name', 'Prediction vs Spectrogram', 'Position', [100 100 1024 1024]);
         subplot(1, 2, 1);
         imshow(spectrogramImage);
         title(sprintf('Frame %d: Combined Signal Spectrogram', frameIndex));
