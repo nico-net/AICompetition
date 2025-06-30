@@ -31,7 +31,7 @@ dlImg = dlarray(realImg, 'SSC'); % 'SSC' = Spatial, Spatial, Channel
 
 % Perform prediction
 predictions = predict(net, dlImg);
-[~, predictedLabel] = max(predictions, [], 3);
+[~, predictedLabel] = hmax(predictions, [], 3);
 predictedLabel = extractdata(predictedLabel);
 
 % Ground truth

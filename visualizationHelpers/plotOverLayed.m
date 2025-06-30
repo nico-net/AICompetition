@@ -10,12 +10,14 @@ function plotOverLayed(img,mask, alpha)
 %   - overlayedImg: RGB image with overlay applied
 
 labelColors = [
-    0.6 0.8 1.0;   % Light Blue
-    1.0 0.6 0.8;   % Pink
-    0.6 0.0 0.8;   % Purple
-    1.0 0.5 0.0    % Orange
-    1.0 0.0 0.0;   % Red
+    0.6 0.8 1.0;   % Light Blue -> AWGN
+    1.0 0.6 0.8;   % Pink -> WLAN
+    0.6 0.0 0.8;   % Purple -> ZigBee
+    1.0 0.5 0.0;   % Orange -> Bluetooth
+    1.0 0.0 0.0;   % Red -> Unknown
+    0.0 0.8 0.4    % Green -> SmartBAN
 ];
+
 
 cmap = labelColors;
 
@@ -35,8 +37,14 @@ hold on;
 mask = reAllignLabels(mask);
 % Overlay the label mask using imagesc
 h = imagesc(mask);
-colormap(cmap); 
+colormap("parula"); 
+c = colorbar;
+clim([42 255]);
 
+% Definisci le etichette
+valori_mask = floor((1:6)/6 * 255); % [42 85 127 170 212 255]
+c.Ticks = valori_mask;
+c.TickLabels = {'AWGN', 'WLAN', 'ZigBee', 'Bluetooth', 'SmartBan', 'Unknown'};
 
 % Set transparency
 set(h, 'AlphaData', alpha);  % Adjust transparency (0 = fully transparent, 1 = opaque)
