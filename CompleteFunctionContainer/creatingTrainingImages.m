@@ -1,4 +1,4 @@
-function creatingTrainingImages(numFrame, pixelValue, sr, imageSize, useGPU)
+function creatingTrainingImages(numFrame, pixelValue, sr, imageSize, useGPU, wantInterf)
 % CREATINGTRAININGIMAGES Generates and saves labeled spectrogram images for training.
 %
 %   creatingTrainingImages(numFrame, label, sr, imageSize, useGPU) generates
@@ -8,11 +8,13 @@ function creatingTrainingImages(numFrame, pixelValue, sr, imageSize, useGPU)
 %   subfolders under 'trainingImages'.
 %
 %   Inputs:
-%       numFrame  - (integer) Number of images (frames) to generate.
-%       label     - (string)  Label of the signal class to generate.
-%       sr        - (double)  Sampling rate in Hz.
-%       imageSize - (cell)    Cell array with image size, e.g., {[1024, 1024]}.
-%       useGPU    - (logical) True to use GPU acceleration, false for CPU only.
+%       numFrame   - (integer) Number of images (frames) to generate.
+%       label      - (string)  Label of the signal class to generate.
+%       sr         - (double)  Sampling rate in Hz.
+%       imageSize  - (cell)    Cell array with image size, e.g., {[1024, 1024]}.
+%       useGPU     - (logical) True to use GPU acceleration, false for CPU only.
+%       wantInterf - (logical) True if the spectrograms should contain
+%                    interferent signals
 %
 %   Output:
 %       None. The function saves image files to disk.
@@ -135,7 +137,11 @@ function creatingTrainingImages(numFrame, pixelValue, sr, imageSize, useGPU)
                 waveFormsClean = gpuWaveFormsClean;
             end
             
-            mixedSignal = mySignalMixerInterf(waveFormsClean, 20e-3, noisePower, pMax);
+            if wantInterf
+                mixedSignal = mySignalMixerInterf(waveFormsClean, 20e-3, noisePower, pMax);
+            else
+                mixedSignal = mySignalMixer(waveFormsClean, 20e-3, noisePower);
+            end
             
             if useGPU
                 gpuMixedSignal = gpuArray(mixedSignal);
