@@ -1,8 +1,7 @@
-
-function creatingTrainingImages(numFrame, pixelValue, sr, imageSize)
+function creatingTrainingImages(numFrame, pixelValue, sr, imageSize, useGPU)
 % CREATINGTRAININGIMAGES Generates and saves labeled spectrogram images for training.
 %
-%   creatingTrainingImages(numFrame, label, sr, imageSize) generates
+%   creatingTrainingImages(numFrame, label, sr, imageSize, useGPU) generates
 %   'numFrame' labeled spectrogram images for the given signal label (e.g., 'WLAN', 
 %   'ZigBee', 'Bluetooth') using a given sampling rate 'sr' and desired image 
 %   dimensions 'imageSize'. The images and their label masks are saved into 
@@ -13,26 +12,44 @@ function creatingTrainingImages(numFrame, pixelValue, sr, imageSize)
 %       label     - (string)  Label of the signal class to generate.
 %       sr        - (double)  Sampling rate in Hz.
 %       imageSize - (cell)    Cell array with image size, e.g., {[1024, 1024]}.
+%       useGPU    - (logical) True to use GPU acceleration, false for CPU only.
 %
 %   Output:
 %       None. The function saves image files to disk.
 %
 % =============================================
-%  Signal Combination → Linear Label Mapping (6 levels)
+%  Signal Combination → Linear Label Mapping (5 levels)
 % =============================================
 %
 %  Bitmask | Signal Combination                     | Label
 %  --------+----------------------------------------+--------
-%    0     | AWGN                                   | 0
+%    0     | Unknown                                | 0
 %    1     | WLAN                                   | 16
 %    2     | Bluetooth                              | 32
 %    3     | ZigBee                                 | 64
 %    4     | SmartBAN                               | 128
-%    5     | Unkwnown                               | 255
+
+    % Set default value for useGPU if not provided
+    if nargin < 5
+        useGPU = false;
+    end
+    
+    % Check GPU availability if requested
+    if useGPU
+        try
+            gpuDevice();
+            fprintf('GPU processing enabled.\n');
+        catch ME
+            warning('GPU not available or compatible. Falling back to CPU processing.');
+            useGPU = false;
+        end
+    else
+        fprintf('CPU processing enabled.\n');
+    end
 
     close all; 
     sr = 80e6;  % Override for test
-    imageSize = {[1024, 1024]};  %Override for test
+    imageSize = {[256, 256]};  %Override for test
     pixelValues = containers.Map(...
         {'WLAN', 'ZigBee', 'Bluetooth', 'SmartBAN'}, ...
         [16, 32, 64, 128]);  % Override for test
@@ -40,14 +57,15 @@ function creatingTrainingImages(numFrame, pixelValue, sr, imageSize)
     % Create output directories for each image size
     for index = 1:length(imageSize)
         imgSize = imageSize{index};
-        folderName = sprintf('%dx%d', imgSize(1), imgSize(2));
+        % folderName = sprintf('%dx%d', imgSize(1), imgSize(2));
+        folderName = ("forTesting");
         dirName = fullfile('trainingImages', folderName);
         if ~exist(dirName, 'dir')
             mkdir(dirName);
         end
     end
     
-    numFrame = 1200;  % Override for test/debug
+    numFrame = 400;  % Override for test/debug
 
     % Class mixture probabilities: more likely to have 1 signal
     weights = [0.2 0.25 0.3 0.25];  
@@ -69,45 +87,76 @@ function creatingTrainingImages(numFrame, pixelValue, sr, imageSize)
                     
             % Generate synthetic signals
             for iter = 1:numSignals
-                type_signal = randi(4);  % 1=ZigBee, 2=WLAN, 3=Bluetooth 4 = SmartBAN
-                [noisyWaveform, wfClean, label] = generateWaveform(type_signal);
+                prob = rand(); % 1=ZigBee, 2=WLAN, 3=Bluetooth 4 = SmartBAN
+                if prob < 0.25 
+                    type_signal = 1;
+                end
+                if prob < 0.45 && prob >= 0.25
+                    type_signal = 2;
+                end
+                if prob >= 0.45 && prob < 0.7
+                    type_signal = 3;
+                end
+                if prob >= 0.7
+                    type_signal = 4;
+                end
+                [noisyWaveform, wfClean, label] = generateWaveform(type_signal, useGPU);
                 labels = cat(1, labels, label);
                 waveformsClean = cat(2, waveformsClean, wfClean);
                 waveforms = cat(2, waveforms, noisyWaveform);
+            end
+
+            % Move to GPU if requested
+            if useGPU
+                gpuWaveFormsClean = gpuArray(waveformsClean);
+            else
+                gpuWaveFormsClean = waveformsClean;
             end
     
             % Array of all the label matrices 
             data_tot = [];
             P_rx_arr = [];
             % Generate labeled spectrogram masks
-            for i = 1:size(waveformsClean, 2)
+            for i = 1:size(gpuWaveFormsClean, 2)
                 label = labels(i, :);
-                waveform = waveformsClean(:, i);
-                [P_matrix, ~, P_rx] = createSpectrogram(waveform, sr, imageSize);
+                waveform = gpuWaveFormsClean(:, i);
+                [P_matrix, ~, P_rx] = createSpectrogram(waveform, sr, imageSize, useGPU);
                 P_rx_arr = cat(1, P_rx_arr, P_rx);
-                labeledImage = labellingImage(P_matrix, label, pixelValues, imageSize{1});
+                labeledImage = labellingImage(P_matrix, label, pixelValues, imageSize{1}, useGPU);
                 data_tot = cat(3, data_tot, labeledImage);
             end
-            [waveformsClean, noisePower] = adjustRxPower(waveformsClean, snr, P_rx_arr, labels);
+            [gpuWaveFormsClean, noisePower, pMax] = adjustRxPower(gpuWaveFormsClean, snr, P_rx_arr, labels, useGPU);
+            
             % Mix signals and create final spectrogram
-            mixedSignal = mySignalMixer(waveformsClean, 20e-3, noisePower);
-            [~, spectrogramTot] = createSpectrogram(mixedSignal, sr, imageSize);
-            pause(4);
+            if useGPU
+                waveFormsClean = gather(gpuWaveFormsClean);
+                pMax = gather(pMax);
+            else
+                waveFormsClean = gpuWaveFormsClean;
+            end
+            
+            mixedSignal = mySignalMixerInterf(waveFormsClean, 20e-3, noisePower, pMax);
+            
+            if useGPU
+                gpuMixedSignal = gpuArray(mixedSignal);
+            else
+                gpuMixedSignal = mixedSignal;
+            end
+            
+            [~, spectrogramTot] = createSpectrogram(gpuMixedSignal, sr, imageSize, useGPU);
             % Save the final spectrogram and mask
             overlapLabelledImages(data_tot, idxFrame, dirName, labels, spectrogramTot, pixelValues, snr, numFrame);
             fprintf("\n\n\n");
-            pause();
             close all
         end
     end
 end
 
 
-
-function [P, I, P_rx] = createSpectrogram(waveform, sr, imageSize)
+function [P, I, P_rx] = createSpectrogram(waveform, sr, imageSize, useGPU)
 % CREATESPECTROGRAM Computes the spectrogram of a waveform and returns it as an image.
 %
-%   [P, I] = createSpectrogram(waveform, sr, imageSize) returns both the numeric
+%   [P, I] = createSpectrogram(waveform, sr, imageSize, useGPU) returns both the numeric
 %   spectrogram matrix and its RGB image form. The result is resized to match
 %   the provided image dimensions.
 %
@@ -115,10 +164,16 @@ function [P, I, P_rx] = createSpectrogram(waveform, sr, imageSize)
 %       waveform  - (vector) Time-domain signal waveform.
 %       sr        - (double) Sampling rate in Hz.
 %       imageSize - (cell)   Cell array specifying target image size.
+%       useGPU    - (logical) True to use GPU acceleration, false for CPU only.
 %
 %   Outputs:
 %       P - (matrix) Spectrogram matrix in dB scale.
 %       I - (image)  RGB image representation of the spectrogram.
+
+    % Set default value for useGPU if not provided
+    if nargin < 4
+        useGPU = false;
+    end
 
     % Declare the fixed scale
     db_min = -130;
@@ -127,6 +182,13 @@ function [P, I, P_rx] = createSpectrogram(waveform, sr, imageSize)
     window = hann(256);
     overlap = 100;
     colormap_resolution = 256;
+
+    % Move data to appropriate processing unit
+    if useGPU && ~isa(waveform, 'gpuArray')
+        waveform = gpuArray(waveform);
+    elseif ~useGPU && isa(waveform, 'gpuArray')
+        waveform = gather(waveform);
+    end
 
     P_rx = 10*log10(max(abs(waveform).^2));
 
@@ -137,9 +199,13 @@ function [P, I, P_rx] = createSpectrogram(waveform, sr, imageSize)
     % Clipping of outliers
     P_db_clipped = min(max(P, db_min), db_max);
     
-    
     % Normalization with respect to the fixed scale
     P_norm = (P_db_clipped - db_min) / (db_max - db_min);
+    
+    % Ensure data is on CPU for image processing
+    if isa(P_norm, 'gpuArray')
+        P_norm = gather(P_norm);
+    end
     
     % Mapping on a 256-value gray scale
     im = imresize(im2uint8(P_norm), imageSize{1}, "nearest");
@@ -147,22 +213,29 @@ function [P, I, P_rx] = createSpectrogram(waveform, sr, imageSize)
     % Convert the image in RGB form
     I = im2uint8(flipud(ind2rgb(im, parula(colormap_resolution))));  % RGB flip
 
+    % Ensure P is on the same processing unit as the input
+    if useGPU && ~isa(P, 'gpuArray')
+        P = gpuArray(P);
+    elseif ~useGPU && isa(P, 'gpuArray')
+        P = gather(P);
+    end
+
     %for debug
-    figure;
-    imshow(I);  % for debug
-    colormap(parula(colormap_resolution));
-    colorbar('Ticks', linspace(0,1,8), ...
-             'TickLabels', linspace(db_min, db_max, 8));  % scale colorbar to dB range
-    title('Power (dB)');
-    axis image off;
+    % figure;
+    % imshow(I);  % for debug
+    % colormap(parula(colormap_resolution));
+    % colorbar('Ticks', linspace(0,1,8), ...
+    %          'TickLabels', linspace(db_min, db_max, 8));  % scale colorbar to dB range
+    % title('Power (dB)');
+    % axis image off;
 
 end
 
 
-function data = labellingImage(P_dB, label, pixelValues, imageSize)
+function data = labellingImage(P_dB, label, pixelValues, imageSize, useGPU)
 % LABELLINGIMAGE Generates a binary mask for a given signal in the spectrogram.
 %
-%   data = labellingImage(P_dB, label, pixelValues, imageSize) thresholds the
+%   data = labellingImage(P_dB, label, pixelValues, imageSize, useGPU) thresholds the
 %   spectrogram to locate the signal and fills the bounding box. It then 
 %   labels the region with the corresponding intensity value for the signal type.
 %
@@ -171,16 +244,30 @@ function data = labellingImage(P_dB, label, pixelValues, imageSize)
 %       label       - (string) Signal label ('ZigBee', 'WLAN', etc.).
 %       pixelValues - (Map)    Mapping from label names to pixel values.
 %       imageSize   - (vector) Size of the output mask image.
+%       useGPU      - (logical) True to use GPU acceleration, false for CPU only.
 %
 %   Output:
 %       data - (matrix) Binary mask with labeled regions.
 
-    if strcmp(label, "SmartBAN")
-        threshold = max(P_dB(:)) - 28;
-    else
-        threshold = max(P_dB(:)) - 15;
+    % Set default value for useGPU if not provided
+    if nargin < 5
+        useGPU = false;
     end
-    mask = P_dB >= threshold;
+
+    % Ensure data is on CPU for image processing operations
+    if isa(P_dB, 'gpuArray')
+        P_dB_cpu = gather(P_dB);
+    else
+        P_dB_cpu = P_dB;
+    end
+
+    if strcmp(label, "SmartBAN")
+        threshold = max(P_dB_cpu(:)) - 28;
+    else
+        threshold = max(P_dB_cpu(:)) - 15;
+    end
+    
+    mask = P_dB_cpu >= threshold;
     mask = flipud(mask);  % Align with spectrogram
     cc = bwconncomp(mask);  % Find connected regions
 
@@ -192,11 +279,16 @@ function data = labellingImage(P_dB, label, pixelValues, imageSize)
         mask(rmin:rmax, cmin:cmax) = true;
     end
 
-    data = zeros(size(P_dB));
+    data = zeros(size(P_dB_cpu));
     pixelValue = pixelValues(label);
     data(mask) = pixelValue;
     
     data = imresize(data, imageSize, "nearest");
+
+    % Move result back to GPU if requested and input was on GPU
+    if useGPU && isa(P_dB, 'gpuArray')
+        data = gpuArray(data);
+    end
 
     %im = imresize(im2uint8(rescale(data)), imageSize, "nearest");
 
@@ -223,6 +315,11 @@ function overlapLabelledImages(data, idxFrame, dir, labels, spectrogram, label_m
 %
 %   Output:
 %       Saves 'data_final' (uint8) and the spectrogram image.
+
+    % Ensure data is on CPU for processing
+    if isa(data, 'gpuArray')
+        data = gather(data);
+    end
 
     % Define fixed label values and priorities
     priority_order = {"Bluetooth", "SmartBAN", "ZigBee", "WLAN"};  % from highest to lowest
@@ -253,21 +350,27 @@ function overlapLabelledImages(data, idxFrame, dir, labels, spectrogram, label_m
     imwrite(spectrogram, char(fname + "_spectrogram.png"));
 end
 
-function [noisyWf, wfFin, label] = generateWaveform(numOfSignal)
+function [noisyWf, wfFin, label] = generateWaveform(numOfSignal, useGPU)
 % GENERATEWAVEFORM Creates synthetic waveforms for one of the three signal types.
 %
-%   [noisyWf, wfFin, label] = generateWaveform(numOfSignal) generates a noisy
+%   [noisyWf, wfFin, label] = generateWaveform(numOfSignal, useGPU) generates a noisy
 %   and clean version of a ZigBee, WLAN, or Bluetooth signal, with a randomly
 %   selected center frequency and channel model.
 %
 %   Input:
 %       numOfSignal - (integer) One of [1, 2, 3], representing:
-%                      1 = ZigBee, 2 = WLAN, 3 = Bluetooth
+%                      1 = ZigBee, 2 = WLAN, 3 = Bluetooth, 4 = SmartBAN
+%       useGPU      - (logical) True to use GPU acceleration, false for CPU only.
 %
 %   Output:
 %       noisyWf - (vector) Signal with noise added.
 %       wfFin   - (vector) Clean signal (without noise).
 %       label   - (string) Type of signal generated.
+
+    % Set default value for useGPU if not provided
+    if nargin < 2
+        useGPU = false;
+    end
 
     if ~isscalar(numOfSignal) || ~isnumeric(numOfSignal) || floor(numOfSignal) ~= numOfSignal
         error('Input must be an integer.');
@@ -286,7 +389,7 @@ function [noisyWf, wfFin, label] = generateWaveform(numOfSignal)
             txPowerArr = [-3, 0, 8]; %in dBm
             weights = [0.15 0.75 0.1];  
             txPower = randsample(txPowerArr, 1, true, weights);
-            [noisyWf, wfFin] = myZigbEEHelper(spc, numPackets, centerFreq, channelType{1}, txPower);
+            [noisyWf, wfFin] = myZigbEEHelper(spc, numPackets, centerFreq, channelType{1}, txPower, useGPU);
             label = "ZigBee";
 
         case 2  % WLAN
@@ -301,7 +404,7 @@ function [noisyWf, wfFin, label] = generateWaveform(numOfSignal)
 
             txPower = ((rand()- 1/2)*5) + 20.5; %in dBm [18; 23] dBm
             channelType = randsample({'Rician', 'Rayleigh'}, 1);
-            [noisyWf, wfFin] = myWlanHelper(choosenCF, channelType{1}, txPower);
+            [noisyWf, wfFin] = myWlanHelper(choosenCF, channelType{1}, txPower, useGPU);
 
         case 3  % Bluetooth
             channelType = randsample({'Rician', 'Rayleigh'}, 1);
@@ -315,7 +418,7 @@ function [noisyWf, wfFin, label] = generateWaveform(numOfSignal)
             weights = [0.03 0.94 0.03];  
             txPower = randsample(txPowerArr, 1, true, weights);
             packetType = packetTypes{randi(length(packetTypes))};
-            [noisyWf, wfFin] = myBluetoothHelper(packetType, channelType{1}, txPower);
+            [noisyWf, wfFin] = myBluetoothHelper(packetType, channelType{1}, txPower, useGPU);
             label = "Bluetooth";
         
         case 4  %SmartBAN
@@ -327,7 +430,7 @@ function [noisyWf, wfFin, label] = generateWaveform(numOfSignal)
             weights = [0.03 0.94 0.03];  
             %weights = [0.2 0.4 0.2 0.2];  
             txPower = randsample(txPowerArr, 1, true, weights);  %in dBm
-            [noisyWf, wfFin] = mySmartBanHelper(channelType{1}, centerFrequency, txPower);
+            [noisyWf, wfFin] = mySmartBanHelper(channelType{1}, centerFrequency, txPower, useGPU);
     end
     fprintf("Tx Power of %s: %f dBm\n", label, txPower);
     clearvars -except noisyWf wfFin label txPower
@@ -376,7 +479,7 @@ function resetWLANFrequencies()
 end
 
 
-function [waveforms_scaled, noise_power_lin] = adjustRxPower(waveforms, snr_dB, P_rx_arr, labels)
+function [waveforms_scaled, noise_power_lin, P_rx_max] = adjustRxPower(waveforms, snr_dB, P_rx_arr, labels, useGPU)
 % ADJUSTRXPOWER  Rescale a bank of received waveforms so that their
 % peak power meets a target SNR with respect to a fixed AWGN level.
 %
@@ -384,14 +487,21 @@ function [waveforms_scaled, noise_power_lin] = adjustRxPower(waveforms, snr_dB, 
 %   waveforms   – Matrix whose columns are signals to be scaled (complex)
 %   snr_dB      – Desired SNR (dB) referenced to AWGN noise_power_dB
 %   P_rx_arr    – Vector of received-power estimates (dB) for each column
+%   labels      – Array of signal labels
+%   useGPU      – (logical) True to use GPU acceleration, false for CPU only.
 %
 % Outputs:
 %   waveforms_scaled – Waveforms after amplitude scaling
 %   noise_power_lin  – Noise power in linear units (same units as signals)
+%   P_rx_max         – Peak received power (dB)
 
+    % Set default value for useGPU if not provided
+    if nargin < 5
+        useGPU = false;
+    end
 
     % --- Fixed AWGN noise floor -------------------------------------------------
-    noise_power_dB  = -30;                       % Noise power in dB (measured with Adalm-Pluto)
+    noise_power_dB  = -30;                       % Noise power in dB (measured with Adalm-Pluto @ 60dB gain)
     noise_power_lin = 10^(noise_power_dB / 10);  % Convert dB → linear
 
     % --- Peak-power of the received signals -------------------------------------
@@ -420,6 +530,14 @@ function [waveforms_scaled, noise_power_lin] = adjustRxPower(waveforms, snr_dB, 
     end
     % -- apply scaling --------------------------------------------------------
     scalingFactorArr = scalingFactor * scaleMask;     % update in-place
+    
+    % Move scalingFactorArr to same processing unit as waveforms
+    if useGPU && isa(waveforms, 'gpuArray') && ~isa(scalingFactorArr, 'gpuArray')
+        scalingFactorArr = gpuArray(scalingFactorArr);
+    elseif ~useGPU && isa(scalingFactorArr, 'gpuArray')
+        scalingFactorArr = gather(scalingFactorArr);
+    end
+    
     % --- Apply the scaling factor to all waveforms ------------------------------
     waveforms_scaled = waveforms .* (scalingFactorArr');
 end
