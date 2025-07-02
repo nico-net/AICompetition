@@ -76,7 +76,6 @@ for k = 1:numSNR
     allBinaryLabels = [];                   % Binary ground truth for AUC calculation
     allScores = [];                         % Prediction scores for AUC calculation
     
-    i = 1;  % Counter for processing images at current SNR level
     
     %% ====================================================================
     %  IMAGE-LEVEL PROCESSING WITHIN CURRENT SNR
@@ -84,8 +83,8 @@ for k = 1:numSNR
     
     for ii = find(idx)
         % Extract ground truth and prediction for current image
-        gt = YTrue{i};      % Ground truth segmentation mask
-        pred = YPred{i};    % Model prediction mask
+        gt = YTrue{ii};      % Ground truth segmentation mask
+        pred = YPred{ii};    % Model prediction mask
         
         % Convert numeric labels to categorical with consistent class mapping
         % Ground truth: numeric values [0,16,32,64,128] → classNames
@@ -106,14 +105,13 @@ for k = 1:numSNR
         %% Binary Classification Preparation for AUC Calculation
         % If probability scores are available, prepare binary classification data
         if ~isempty(scoresCell)
-            scoreImg = scoresCell{i};                           % Softmax scores (H×W×C)
+            scoreImg = scoresCell{ii};                           % Softmax scores (H×W×C)
             fgScore = max(scoreImg(:,:,2:end), [], 3);         % Max foreground probability
             binGT = (gtVec ~= classNames(1));                  % Binary mask (background=0, foreground=1)
             allBinaryLabels = [allBinaryLabels; binGT(:)];     % Accumulate binary labels
             allScores = [allScores; fgScore(:)];               % Accumulate prediction scores
         end
         
-        i = i + 1;  % Increment image counter
     end
     
     % Accumulate current SNR confusion matrix into global matrix
