@@ -29,14 +29,14 @@ clear;             % Clear workspace variables
 
 % Define data source and model parameters
 folderName = "Noise";                                               % Root directory containing test data
-net = load("Reti/ResNet_18_deep/myNet_2025_06_28_01_04.mat").net;   % Load trained segmentation network
+net = load("/Users/matteo/Desktop/TEMPORARY/Reti/ResNet50_Unet_170625/ResNet50_Unet_170625.mat").net;   % Load trained segmentation network
 imageSuffix = "_spectrogram.png";                                   % Image file extension (adjust as needed)
 
 % Define semantic class mapping for wireless protocol classification
 classNames = ["Unknown","WLAN","ZigBee","Bluetooth","SmartBAN"];    % Class labels in network output order
 
 % Configure output settings
-netName = 'ResNet18Deep';                                           % Network identifier for file naming
+netName = 'ResNet50';                                           % Network identifier for file naming
 outDir = fullfile('Perfomances', netName);                         % Output directory for results
 
 % Ensure output directory exists for saving results
