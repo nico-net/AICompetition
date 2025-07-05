@@ -64,7 +64,7 @@ cdsTrain = combine(imdsTrain,pxdsTrain);
 cdsVal   = combine(imdsVal,pxdsVal);
 cdsTest  = combine(imdsTest,pxdsTest);
 
-%% STEP 4: Baseline evaluation (no pruning / no quantization) -------------
+%% STEP 4: Baseline evaluation (no pruning or projection/ no quantization)-
 trainedNetMetrics = evaluateNet(trainedNet,imdsTest,pxdsTest,classes);
 trainedNetMetrics.DataSetMetrics               % Display baseline metrics
 
@@ -116,7 +116,7 @@ trainingOptions = trainingOptions("sgdm", ...
     ValidationFrequency  = 150, ...           % Validate every 150 iterations
     ExecutionEnvironment = "multi-gpu");      % Use all available GPUs
 
-[prunedNetFinetuned, info] = trainnet(cdsTest, prunedNet, trainingOptions);
+[prunedNetFinetuned, ~] = trainnet(cdsTrain, prunedNet, trainingOptions);
 save("dlnet_pruned_retrained.mat","prunedNetFinetuned");
 
 %% STEP 10: Evaluate fine‑tuned pruned network ----------------------------
@@ -124,17 +124,30 @@ prunedNetMetrics = evaluateNet(prunedNetFinetuned,imdsTest,pxdsTest,classes);
 prunedNetMetrics.DataSetMetrics              % Show fine‑tuned metrics
 
 % Compare original vs pruned ------------------------------------------------
-statsPruned = compareNetworkMetrics(trainedNet,prunedNetFinetuned, ...
+statsProjected = compareNetworkMetrics(trainedNet,prunedNetFinetuned, ...
     trainedNetMetrics.DataSetMetrics.MeanAccuracy, ...
     prunedNetMetrics.DataSetMetrics.MeanAccuracy, "Pruned Network");
 
-%% STEP 11: Post‑training quantization ------------------------------------
-eqNet = equalizeLayers(prunedNet);          % (Optional) activation equal.
-quantizableNet = dlquantizer(prunedNet,ExecutionEnvironment="CPU");
+%% STEP 11: Projection network
+[fineTunedProjectedNet,~] = projectionFunction(prunedNetFinetuned, mbqTrain, ...
+    trainingOptions, cdsTrain);
+
+%% STEP 12: Performance evaluation
+projectedNetMetrics = evaluateNet(fineTunedProjectedNet,imdsTest,pxdsTest,classes);
+projectedNetMetrics.DataSetMetrics              % Show fine‑tuned metrics
+
+% Compare original vs pruned ------------------------------------------------
+statsPruned = compareNetworkMetrics(trainedNet,fineTunedProjectedNet, ...
+    trainedNetMetrics.DataSetMetrics.MeanAccuracy, ...
+    projectedNetMetrics.DataSetMetrics.MeanAccuracy, "Projected Network");
+
+%% STEP 13: Post‑projection quantization ------------------------------------
+eqNet = equalizeLayers(fineTunedProjectedNet);          % (Optional) activation equal.
+quantizableNet = dlquantizer(fineTunedProjectedNet,ExecutionEnvironment="CPU");
 calibrate(quantizableNet,cdsTrain,MiniBatchSize=16);  % Collect ranges
 quantizedNet = quantize(quantizableNet,ExponentScheme="Histogram"); % INT8
 
-%% STEP 12: Evaluate quantized network ------------------------------------
+%% STEP 14: Evaluate quantized network ------------------------------------
 quantizedNetMetrics = evaluateNet(quantizedNet,imdsTest,pxdsTest,classes);
 quantizedNetMetrics.DataSetMetrics          % Show INT8 metrics
 
@@ -143,14 +156,37 @@ statsQuantized = compareNetworkMetrics(trainedNet,quantizedNet, ...
     trainedNetMetrics.DataSetMetrics.MeanAccuracy, ...
     quantizedNetMetrics.DataSetMetrics.MeanAccuracy, "Quantized Network");
 
-%% STEP 13: Summary table --------------------------------------------------
-[statsPruned(1:2,:); statsQuantized(2,:)]   % Display combined summary
-% ── Save both tables in the same MAT‑file
-save("statsComparison.mat","statsPruned","statsQuantized");
+%% STEP 15: Summary table --------------------------------------------------
+[statsPruned(1:2,:); statsProjected(1:2, :);statsQuantized(2,:)]   % Display combined summary
+% ── Save all tables in the same MAT‑file
+save("statsComparison.mat","statsPruned", "statsProjected","statsQuantized");
+
+%% STEP 16: Plotting
+
+iouOriginal = trainedNetMetrics.DataSetMetrics.MeanIoU;
+iouPruned   = prunedNetMetrics.DataSetMetrics.MeanIoU;
+iouProject  = projectedNetMetrics.DataSetMetrics.MeanIoU;
+iouQuant    = quantizedNetMetrics.DataSetMetrics.MeanIoU;
+
+figure
+tiledlayout("flow")
+
+nexttile
+bar([iouOriginal iouPruned iouProject iouQuant])
+xticklabels(["Original" "Pruned" "Projected" "Quantized"])
+ylabel("Mean IoU")
+title("Mean IoU")
+
+nexttile
+bar([numLearnables(trainedNet) numLearnables(fineTunedProjectedNet) ...
+    numLearnables(fineTunedProjectedNet) numLearnables(quantizedNet)])
+xticklabels(["Original" "Pruned" "Projected" "Quantized"])
+ylabel("Number of Learnables")
+title("Number of Learnables")
 
 
 %% -------------------------------------------------------------------------
-%% HELPER FUNCTIONS (unchanged, now fully commented) -----------------------
+%% HELPER FUNCTIONS 
 %% -------------------------------------------------------------------------
 
 function data = readGroundTruthMatFile(filename)
@@ -221,82 +257,82 @@ function [prunableNet, logs] = pruneNetworkTaylor(prunableNet, mbqTrain, ...
 % PRUNENETWORKTAYLOR  Taylor‑criterion iterative filter pruning.
 %   Returns pruned network + logs of loss/IoU/remaining channels.
 
-% Initialise bookkeeping ---------------------------------------------------
-pruningIteration = 0;              % External pruning‑round counter
-velocity         = [];             % SGDM momentum buffer
-
-logs.MeanLoss     = zeros(opts.MaxPruningIterations,1);
-logs.WeightedIoU  = zeros(opts.MaxPruningIterations,1);
-logs.NumPrunables = zeros(opts.MaxPruningIterations,1);
-
-monitor = trainingProgressMonitor( ...
-    Metrics=["Loss","WeightedIoU","NumPrunables"], ...
-    Info="Iteration",XLabel="Pruning Iteration");
-
-% Baseline validation ------------------------------------------------------
-metrics = evaluateNet(prunableNet, imdsVal, pxdsVal, classes);
-disp("Initial IoU (unpruned): " + metrics.DataSetMetrics.WeightedIoU);
-
-% === Main pruning loop ====================================================
-while (prunableNet.NumPrunables > opts.MaxToPrune) && ...
-      (pruningIteration < opts.MaxPruningIterations)
-
-    pruningIteration = pruningIteration + 1;
-    disp("=== Pruning iteration " + pruningIteration + " ===");
-
-    reset(mbqTrain);               % Rewind minibatchqueue
-    shuffle(mbqTrain);             % Shuffle training order each round
-
-    totalLoss  = 0;                % Accumulator for mean loss
-    batchCount = 0;                % Mini‑batch counter (per round)
-
-    % -- Inner fine‑tuning loop -------------------------------------------
-    while hasdata(mbqTrain)
-        [dlX, dlY] = next(mbqTrain);               % Fetch next batch
-
-        % Forward + backward (dlfeval for dynamic graph) ------------------
-        [grads, dGating, gatingOuts, state, loss] = ...
-            dlfeval(@modelGradients, prunableNet, dlX, dlY, classes);
-        prunableNet.State = state;                 % Update layer states
-
-        % SGDM parameter update -------------------------------------------
-        [prunableNet, velocity] = sgdmupdate( ...
-            prunableNet, grads, velocity, opts.LearnRate, opts.Momentum);
-
-        % Accumulate Taylor scores for each gating layer ------------------
-        prunableNet = updateScore(prunableNet, dGating, gatingOuts);
-
-        % Track loss to compute mean later --------------------------------
-        totalLoss  = totalLoss + double(gather(extractdata(loss)));
-        batchCount = batchCount + 1;
-
-        % Stop inner loop if we hit per‑round budget ----------------------
-        if batchCount >= opts.MaxMinibatchIterations
-            break;
+    % Initialise bookkeeping ---------------------------------------------------
+    pruningIteration = 0;              % External pruning‑round counter
+    velocity         = [];             % SGDM momentum buffer
+    
+    logs.MeanLoss     = zeros(opts.MaxPruningIterations,1);
+    logs.WeightedIoU  = zeros(opts.MaxPruningIterations,1);
+    logs.NumPrunables = zeros(opts.MaxPruningIterations,1);
+    
+    monitor = trainingProgressMonitor( ...
+        Metrics=["Loss","WeightedIoU","NumPrunables"], ...
+        Info="Iteration",XLabel="Pruning Iteration");
+    
+    % Baseline validation ------------------------------------------------------
+    metrics = evaluateNet(prunableNet, imdsVal, pxdsVal, classes);
+    disp("Initial IoU (unpruned): " + metrics.DataSetMetrics.WeightedIoU);
+    
+    % === Main pruning loop ====================================================
+    while (prunableNet.NumPrunables > opts.MaxToPrune) && ...
+          (pruningIteration < opts.MaxPruningIterations)
+    
+        pruningIteration = pruningIteration + 1;
+        disp("=== Pruning iteration " + pruningIteration + " ===");
+    
+        reset(mbqTrain);               % Rewind minibatchqueue
+        shuffle(mbqTrain);             % Shuffle training order each round
+    
+        totalLoss  = 0;                % Accumulator for mean loss
+        batchCount = 0;                % Mini‑batch counter (per round)
+    
+        % -- Inner fine‑tuning loop -------------------------------------------
+        while hasdata(mbqTrain)
+            [dlX, dlY] = next(mbqTrain);               % Fetch next batch
+    
+            % Forward + backward (dlfeval for dynamic graph) ------------------
+            [grads, dGating, gatingOuts, state, loss] = ...
+                dlfeval(@modelGradients, prunableNet, dlX, dlY, classes);
+            prunableNet.State = state;                 % Update layer states
+    
+            % SGDM parameter update -------------------------------------------
+            [prunableNet, velocity] = sgdmupdate( ...
+                prunableNet, grads, velocity, opts.LearnRate, opts.Momentum);
+    
+            % Accumulate Taylor scores for each gating layer ------------------
+            prunableNet = updateScore(prunableNet, dGating, gatingOuts);
+    
+            % Track loss to compute mean later --------------------------------
+            totalLoss  = totalLoss + double(gather(extractdata(loss)));
+            batchCount = batchCount + 1;
+    
+            % Stop inner loop if we hit per‑round budget ----------------------
+            if batchCount >= opts.MaxMinibatchIterations
+                break;
+            end
         end
+    
+        % -- Prune lowest‑score channels network‑wide -------------------------
+        prunableNet = updatePrunables(prunableNet, MaxToPrune=opts.MaxToPrune);
+    
+        % -- Periodic validation ----------------------------------------------
+        if mod(pruningIteration, opts.ValidationFrequency) == 0 || pruningIteration == 1
+            metrics = evaluateNet(prunableNet, imdsVal, pxdsVal, classes);
+            currentIoU = metrics.DataSetMetrics.WeightedIoU;
+        else
+            currentIoU = NaN;  % Skip this round
+        end
+    
+        % -- Logging -----------------------------------------------------------
+        avgLoss = totalLoss / batchCount;           % Mean training loss
+        logs.MeanLoss(pruningIteration)     = avgLoss;
+        logs.WeightedIoU(pruningIteration)  = currentIoU;
+        logs.NumPrunables(pruningIteration) = prunableNet.NumPrunables;
+    
+        recordMetrics(monitor, pruningIteration,Loss=avgLoss, ...
+            WeightedIoU=currentIoU,NumPrunables=prunableNet.NumPrunables);
+        updateInfo(monitor,Iteration=pruningIteration);
     end
-
-    % -- Prune lowest‑score channels network‑wide -------------------------
-    prunableNet = updatePrunables(prunableNet, MaxToPrune=opts.MaxToPrune);
-
-    % -- Periodic validation ----------------------------------------------
-    if mod(pruningIteration, opts.ValidationFrequency) == 0 || pruningIteration == 1
-        metrics = evaluateNet(prunableNet, imdsVal, pxdsVal, classes);
-        currentIoU = metrics.DataSetMetrics.WeightedIoU;
-    else
-        currentIoU = NaN;  % Skip this round
-    end
-
-    % -- Logging -----------------------------------------------------------
-    avgLoss = totalLoss / batchCount;           % Mean training loss
-    logs.MeanLoss(pruningIteration)     = avgLoss;
-    logs.WeightedIoU(pruningIteration)  = currentIoU;
-    logs.NumPrunables(pruningIteration) = prunableNet.NumPrunables;
-
-    recordMetrics(monitor, pruningIteration,Loss=avgLoss, ...
-        WeightedIoU=currentIoU,NumPrunables=prunableNet.NumPrunables);
-    updateInfo(monitor,Iteration=pruningIteration);
-end
 end
 
 function [dLossdLearnables, pruningGradient, pruningActivations, state, loss] = ...
@@ -320,4 +356,12 @@ loss = crossentropy(networkOut,Y) / numPixels;
 % Backward: grads w.r.t. learnables + gating activations -------------------
 [dLossdLearnables, pruningGradient] = dlgradient(loss, ...
     networkPruner.Learnables, pruningActivations);
+end
+
+
+function N = numLearnables(net)
+    N = 0;
+    for i = 1:size(net.Learnables,1)
+        N = N + numel(net.Learnables.Value{i});
+    end
 end
