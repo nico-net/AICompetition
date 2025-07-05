@@ -165,6 +165,9 @@ disp("\n**************** Training & Evaluation complete ****************");
 %% helperSpecSensePartitionData : consistent 70/10/20 split ---------------
 function [imdsTr, pxdsTr, imdsVa, pxdsVa, imdsTe, pxdsTe] = ...
         helperSpecSensePartitionData(imds, pxds, parts)
+%  Borrowed from Mathwork's code
+%   Copyright 2021-2023 The MathWorks, Inc.
+
     % parts = [train  val  test] as percentage (must sum to 100)
     validateattributes(parts, {"numeric"}, {"size", [1 3]});
     assert(sum(parts)==100, "Sum of parts must be 100");
