@@ -1,129 +1,150 @@
 function [noisyWf, finWf] = mySmartBanHelper(Channel, centerFreq, txPower)
+%MYSMARTBANHELPER Simulates a SmartBAN transmission scenario
+%
+%   [noisyWf, finWf] = mySmartBanHelper(Channel, centerFreq, txPower)
+%
+%   This function generates a SmartBAN-like GMSK-modulated signal,
+%   applies fading (Rayleigh/Rician), frequency offset, and transmits
+%   periodic data packets and acknowledgments, preceded by a beacon.
+%   To simulate the signal we based our estimates on the Technical Reports
+%   released publicly by ETSI SmartBAN group and on already existing MAC
+%   simulations. More information about it can be found in the report.
+%
+%   Inputs:
+%     - Channel      : Channel type to use ('Rayleigh', 'Rician', or none)
+%     - centerFreq   : Carrier frequency in Hz (used for frequency offset)
+%     - txPower      : Transmit power in dBm
+%
+%   Outputs:
+%     - noisyWf      : Final waveform with AWGN
+%     - finWf        : Channel and frequency shifted waveform (no noise)
 
+    % --- Parameters ---
+    ISMSstart = 2.402e9;                     % ISM band reference frequency
+    timeDuration = 0.02;                     % Total signal duration (20 ms)
+    slotDuration = 0.001250;                 % Slot duration (1.25 ms)
+    bitRate = 1e6;                           % SmartBAN nominal bitrate (1 Mbps)
+    sampleRate = 80e6;                       % Final sample rate
+    ifs = 150e-6;                            % Interframe spacing (150 µs)
 
+    dataPacketLength = 64 * 8;              % Payload: 64 bytes
+    ackPacketLength = 64 + 104;             % ACK: MAC + PHY bits
+    beaconLength = 248;                     % Beacon bits (MAC + PHY)
+    missProb = 0.1;                         % Initial probability to miss a transmission
+    currentMissProb = missProb;
 
-dataBeacon = randi([0 1], 248, 1);
+    % --- TX Power Conversion ---
+    txPower_W = 10^((txPower - 30)/10);      % Convert dBm to Watts
+    scalingFactor = sqrt(txPower_W);         % Linear amplitude scaling
 
-ISMSstart = 2.402e9;
+    % --- Frequency Offset Configuration ---
+    fOff = comm.PhaseFrequencyOffset;
+    fOff.SampleRate = sampleRate;
+    fOff.FrequencyOffset = centerFreq - ISMSstart;
 
-fOff = comm.PhaseFrequencyOffset;
+    % --- GMSK Modulator Configuration ---
+    modulator = comm.GMSKModulator( ...
+        "BandwidthTimeProduct", 0.5, ...
+        "BitInput", true, ...
+        "SamplesPerSymbol", sampleRate / bitRate);
 
-txPower_W = 10^((txPower - 30)/10);
-scalingFactor = sqrt(txPower_W);
+    % --- Channel Selection ---
+    switch Channel
+        case 'Rician'
+            chan = comm.RicianChannel;
+            chan.SampleRate = sampleRate;
+            chan.PathDelays = [0 50e-9 150e-9 300e-9];
+            chan.AveragePathGains = [0 -3 -8 -15];
+            chan.KFactor = 8;
+            chan.MaximumDopplerShift = 12;
+            chan.DopplerSpectrum = doppler('Jakes');
+            chan.NormalizePathGains = true;
+        case 'Rayleigh'
+            chan = comm.RayleighChannel;
+            chan.SampleRate = sampleRate;
+            chan.PathDelays = [0 50e-9 150e-9 300e-9];
+            chan.AveragePathGains = [0 -3 -8 -15];
+            chan.MaximumDopplerShift = 12;
+            chan.DopplerSpectrum = doppler('Jakes');
+        otherwise
+            % No channel effects applied
+    end
 
+    % --- Beacon Generation ---
+    dataBeacon = randi([0 1], beaconLength, 1);
+    beaconSignal = modulator(dataBeacon);
+    beaconSignal = scalingFactor * beaconSignal;
 
-timeDuration = 0.02; %s
-slotDuration = 0.001250; %s
-bitRate = 1e6;  %Nominal Transmission rate for smartban
-sampleRate = 80e6;
+    % Beacon always passes through Rician channel
+    beaconchan = comm.RicianChannel;
+    beaconchan.SampleRate = sampleRate;
+    beaconchan.PathDelays = [0 50e-9 150e-9 300e-9];
+    beaconchan.AveragePathGains = [0 -3 -8 -15];
+    beaconchan.KFactor = 8;
+    beaconchan.MaximumDopplerShift = 12;
+    beaconchan.DopplerSpectrum = doppler('Jakes');
+    beaconchan.NormalizePathGains = true;
+    beaconSignal = beaconchan(beaconSignal);
 
-fOff.SampleRate = sampleRate;
-fOff.FrequencyOffset = centerFreq - ISMSstart;
+    % --- Start Simulation: Randomly place beacon ---
+    startPoint = floor(rand() * timeDuration * sampleRate);
 
-dataPacketLength = 64 * 8;
-ackPacketLength = 64 + 104; % Bodyless MAC frame + PHY
-ifs = 0.000150; % interframe spacing, 150 us
+    if (startPoint > timeDuration * sampleRate - length(beaconSignal) + 1)
+        finWf = [zeros(startPoint - 1, 1); beaconSignal];
+        finWf = finWf(1:timeDuration * sampleRate);
+    elseif (startPoint > timeDuration * sampleRate - slotDuration * sampleRate + 1)
+        % Pad beacon to fill the slot
+        finWf = [zeros(startPoint - 1, 1); beaconSignal; ...
+                 zeros(slotDuration * sampleRate - length(beaconSignal), 1)];
+        finWf = finWf(1:timeDuration * sampleRate);
+    else
+        % Place beacon and continue with packet/ACK traffic
+        finWf = [zeros(startPoint - 1, 1); beaconSignal; ...
+                 zeros(sampleRate * slotDuration - length(beaconSignal), 1)];
 
-missProb = 0.1;
-currentMissProb = missProb;
+        % --- Begin packet/ACK loop ---
+        while length(finWf) < timeDuration * sampleRate
+            dataPacket = randi([0 1], dataPacketLength, 1);
 
+            if rand() > currentMissProb
+                % Transmit data packet
+                packetSignal = modulator(dataPacket) * 0.1 * scalingFactor;
+                packetSignal = chan(packetSignal);
 
-modulator = comm.GMSKModulator( ...
-    "BandwidthTimeProduct", 0.5, ...
-    "BitInput", true, ...
-    "SamplesPerSymbol", sampleRate/bitRate);
+                % Pad time to fill slot with IFS, ACK, etc.
+                padding = zeros((slotDuration - 2*ifs - ...
+                    ackPacketLength / bitRate - dataPacketLength / bitRate) * ...
+                    sampleRate, 1);
 
+                finWf = [finWf; packetSignal; padding];
 
-switch Channel
-    case 'Rician'
-        chan = comm.RicianChannel;
-        chan.SampleRate = sampleRate;
-        chan.PathDelays = [0 50e-9 150e-9 300e-9];
-        chan.AveragePathGains = [0 -3 -8 -15]; %Typical model for indoor BT --> We also use it for SmartBAN because of similiar use cases
-        chan.KFactor = 8;   % LoS indoor
-        chan.MaximumDopplerShift = 12;  % walking speed doppler
-        chan.DopplerSpectrum = doppler('Jakes');
-        chan.NormalizePathGains = true;
-    case 'Rayleigh'
-        chan = comm.RayleighChannel;
-        chan.SampleRate = sampleRate;
-        chan.PathDelays        = [0 50e-9 150e-9 300e-9];    % seconds
-        chan.AveragePathGains  = [0 -3  -8   -15   ];       % dB
-        % Maximum Doppler shift for ~1 m/s
-        fD = (1/3e8)*2.4e9;        % ≈8 Hz
-        chan.MaximumDopplerShift = 12;         % e.g. moderate walking speed
-        chan.DopplerSpectrum     = doppler('Jakes');
+                % Interframe space
+                finWf = [finWf; zeros(floor(ifs * sampleRate), 1)];
 
+                % Transmit ACK
+                dataAck = randi([0 1], ackPacketLength, 1);
+                ackSignal = modulator(dataAck) * 0.1 * scalingFactor;
+                ackSignal = chan(ackSignal);
 
-    otherwise
-end
+                finWf = [finWf; ackSignal; zeros(floor(ifs * sampleRate), 1)];
 
-beaconSignal = modulator(dataBeacon);
-% scaling power
-beaconSignal = scalingFactor * beaconSignal;
+                currentMissProb = currentMissProb + 0.05;
+            else
+                % Drop (simulate packet miss)
+                missedPacket = zeros(sampleRate * slotDuration, 1);
+                finWf = [finWf; missedPacket];
+                currentMissProb = currentMissProb - 0.1;
+            end
 
-beaconchan = comm.RicianChannel;
-        beaconchan.SampleRate = sampleRate;
-        beaconchan.PathDelays = [0 50e-9 150e-9 300e-9];
-        beaconchan.AveragePathGains = [0 -3 -8 -15]; %Typical model for indoor BT --> We also use it for SmartBAN because of similiar use cases
-        beaconchan.KFactor = 8;   % LoS indoor
-        beaconchan.MaximumDopplerShift = 12;  % walking speed doppler
-        beaconchan.DopplerSpectrum = doppler('Jakes');
-        beaconchan.NormalizePathGains = true;
-
-beaconSignal = beaconchan(beaconSignal);
-
-
-startPoint = floor(rand() * timeDuration * sampleRate);
-
-
-if (startPoint > timeDuration * sampleRate - length(beaconSignal) + 1)
-  finWf = [zeros(startPoint -1, 1); beaconSignal];
-  finWf = finWf(1:timeDuration * sampleRate);
-elseif (startPoint > timeDuration * sampleRate - slotDuration*sampleRate + 1)
-    finWf = [zeros(startPoint -1, 1); beaconSignal; zeros(slotDuration * sampleRate - length(beaconSignal), 1)];
-    finWf = finWf(1:timeDuration * sampleRate);
-else 
-    finWf = [zeros(startPoint - 1, 1); beaconSignal; zeros(sampleRate * slotDuration - length(beaconSignal), 1)];
-    while (length(finWf) < timeDuration * sampleRate)
-        dataPacket = randi([0 1], dataPacketLength, 1);
-        if (rand() > currentMissProb)
-            packetSignal = modulator(dataPacket) * 0.1 * scalingFactor;
-            packetSignal = chan(packetSignal);
-            finWf = [finWf; packetSignal; zeros((slotDuration - ifs * 2 - ackPacketLength/bitRate - dataPacketLength) * sampleRate/bitRate, 1)];
-            finWf = [finWf; zeros(floor(ifs*sampleRate), 1)];
-            dataAck = randi([0 1], ackPacketLength, 1);
-            ackSignal = modulator(dataAck) * 0.1 * scalingFactor;
-            ackSignal = chan(ackSignal);
-            finWf = [finWf; ackSignal; zeros(floor(ifs * sampleRate), 1)];
-            currentMissProb = currentMissProb + 0.05;
-        else 
-            missedPacket = zeros(sampleRate*slotDuration, 1);
-            finWf = [finWf; missedPacket];
-            currentMissProb = currentMissProb - 0.1;
-        end
-        if (length(finWf) > timeDuration * sampleRate)
-            finWf = finWf(1:timeDuration * sampleRate);
+            % Truncate if signal exceeds time duration
+            if length(finWf) > timeDuration * sampleRate
+                finWf = finWf(1:timeDuration * sampleRate);
+            end
         end
     end
+
+    % --- Apply frequency offset and noise ---
+    finWf = fOff(finWf);
+    noisyWf = awgn(finWf, 20);  % Add AWGN with 20 dB SNR
+
 end
-finWf = fOff(finWf);
-noisyWf = awgn(finWf, 20);
-end
-
-
-
-%Generate beacon 
-
-
-
-% GFSK   BT = 0.5   h = 0.5 
-% Lslot = 625 * 2 = 1250 microsec
-% 64 byte = 512 bits 
-% Ack is pretty much required and is 168 bit
-
-% The beacon is 248 bits MAC + PHY
-
-% Beacon randomly placed, then followed by lower energy packets
-
-% We use comm.GMSKModulator
