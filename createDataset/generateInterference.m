@@ -33,7 +33,7 @@ function interfer = generateInterference(n, pMax)
         type = randi(4);
         isFoff = false;
         switch type
-            case 1 % medium band noise burst
+            case 1
                 fOff = comm.PhaseFrequencyOffset();
                 fOff.FrequencyOffset = f_bb;
                 bw = 4e6 + 6e6*rand;            % 1–5 MHz
