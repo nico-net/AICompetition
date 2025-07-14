@@ -1,11 +1,10 @@
-function [cleanWf] = helperSmartBANSDR(sampleRate, frameDuration)
+function [cleanWf] = helperSmartBANSDR(sampleRate)
 % helperSmartBANSDR Generate a SmartBAN GMSK waveform for SDR transmission
 %
-%   cleanWf = helperSmartBANSDR(sampleRate, frameDuration)
+%   cleanWf = helperSmartBANSDR(sampleRate)
 %
 %   Inputs:
 %       sampleRate    - Sample rate in Hz (positive scalar)
-%       frameDuration - Duration of the output waveform in seconds (positive scalar)
 %
 %   Output:
 %       cleanWf      - Baseband waveform of SmartBAN beacon and packets
@@ -14,14 +13,10 @@ function [cleanWf] = helperSmartBANSDR(sampleRate, frameDuration)
     if ~isscalar(sampleRate) || ~isnumeric(sampleRate) || sampleRate <= 0
         error('sampleRate must be a positive numeric scalar.');
     end
-    if ~isscalar(frameDuration) || ~isnumeric(frameDuration) || frameDuration <= 0
-        error('frameDuration must be a positive numeric scalar.');
-    end
 
     % --- Initialize beacon data bits (MAC + PHY) ---
     dataBeacon = randi([0 1], 248, 1);
 
-    timeDuration = frameDuration;    % seconds
     slotDuration = 0.001250;         % seconds
     bitRate = 1e6;                   % bits per second
 
@@ -42,24 +37,9 @@ function [cleanWf] = helperSmartBANSDR(sampleRate, frameDuration)
 
     % --- Modulate the beacon ---
     beaconSignal = modulator(dataBeacon);
-
-    % --- Random start point for beacon within the frame duration ---
-    startPoint = floor(rand() * timeDuration * sampleRate);
-
-    % --- Build the full waveform depending on where beacon starts ---
-    if (startPoint > timeDuration * sampleRate - length(beaconSignal) + 1)
-        % Beacon placed near the end, pad with zeros before beacon
-        cleanWf = [zeros(startPoint - 1, 1); beaconSignal];
-        cleanWf = cleanWf(1:timeDuration * sampleRate);
-    elseif (startPoint > timeDuration * sampleRate - slotDuration * sampleRate + 1)
-        % Beacon placed near end of last slot, pad zeros after beacon
-        cleanWf = [zeros(startPoint - 1, 1); beaconSignal; zeros(slotDuration * sampleRate - length(beaconSignal), 1)];
-        cleanWf = cleanWf(1:timeDuration * sampleRate);
-    else
-        % Beacon placed early enough; build packets after beacon
-        cleanWf = [zeros(startPoint - 1, 1); beaconSignal; zeros(sampleRate * slotDuration - length(beaconSignal), 1)];
-
-        while length(cleanWf) < timeDuration * sampleRate
+    numSamples = 17026;
+    cleanWf = [beaconSignal; zeros(sampleRate * slotDuration - length(beaconSignal), 1)];
+     while length(cleanWf) < numSamples
             dataPacket = randi([0 1], dataPacketLength, 1);
             if rand() > currentMissProb
                 % Modulate data packet with reduced power
@@ -85,9 +65,10 @@ function [cleanWf] = helperSmartBANSDR(sampleRate, frameDuration)
             end
 
             % Truncate waveform if it exceeds the target duration
-            if length(cleanWf) > timeDuration * sampleRate
-                cleanWf = cleanWf(1:timeDuration * sampleRate);
+            if length(cleanWf) > numSamples
+                cleanWf = cleanWf(1:numSamples);
             end
-        end
-    end
+     end
+
 end
+
