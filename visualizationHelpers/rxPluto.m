@@ -10,7 +10,7 @@
 % FEATURES:
 %   - Parallel acquisition from two PlutoSDR devices
 %   - Synchronized sampling with configurable timing
-%   - Frequency shifting and signal combination
+%   - Frequency shifting and signal com bination
 %   - AWGN noise addition for realistic scenarios
 %   - High-quality spectrogram generation
 %   - AI-based signal classification
@@ -20,7 +20,7 @@
 %   - Two ADALM-Pluto SDR devices (usb:0 and usb:1)
 %   - Communications Toolbox Support Package for ADALM-Pluto Radio
 %   - Parallel Computing Toolbox
-%   - Signal Processing Toolbox
+%   - Signal Processing Toolbox  
 %   - Image Processing Toolbox
 %   - Deep Learning Toolbox (for AI classification)
 %   - Pretrained neural network model (variable: net)
@@ -255,37 +255,8 @@ try
         %% --- VISUALIZATION ---
         fprintf('Creating visualization...\n');
         visualizationStartTime = tic;
-        
-        % Create main figure for results
-        mainFigure = figure('Name', sprintf('Frame %d Analysis', frameIndex), ...
-                           'NumberTitle', 'off', 'Position', [100, 100, 1200, 800]);
-        
-        % Display spectrogram with proper scaling
-        figure('Name', 'Prediction vs Spectrogram', 'Position', [100 100 1024 1024]);
-        subplot(1, 2, 1);
-        imshow(spectrogramImage);
-        title(sprintf('Frame %d: Combined Signal Spectrogram', frameIndex));
-        
-        % Add colorbar for power scale
-        colormap(parula(spectrogramConfig.colormapResolution));
-        clim([spectrogramConfig.dbMin, spectrogramConfig.dbMax]);
-        colorbarHandle = colorbar;
-        colorbarHandle.Label.String = 'Power (dB)';
-        
-        % Display classification overlay
-        subplot(1, 2, 2);
-        plotOverLayed(spectrogramImage, predictedLabel, 1);
-        title('AI Classification Overlay');
-        
-        figure("Other Statistics")
-        % Display power spectrum statistics
-        subplot(1, 2, 1);
-        plotPowerSpectrum(powerSpectrum, processedSampleRate, spectrogramConfig);
-        
-        % Display acquisition summary
-        subplot(1, 2, 2);
-        displayAcquisitionSummary(frameIndex, totalFrames, acquisitionTime, ...
-                                 processingTime, spectrogramTime, classificationTime);
+       
+        plotImageAndMask(spectrogramImage, predictedLabel, spectrogramConfig);
         
         visualizationTime = toc(visualizationStartTime);
         fprintf('Visualization completed in %.3f seconds\n', visualizationTime);
@@ -310,6 +281,7 @@ catch ME
     fprintf('\n=== Error Occurred During Acquisition ===\n');
     fprintf('Error: %s\n', ME.message);
     fprintf('Frame: %d/%d\n', frameIndex, totalFrames);
+    
     
     if contains(ME.message, 'PlutoSDR') || contains(ME.message, 'SDR')
         fprintf('SDR hardware error detected. Check connections and drivers.\n');
@@ -491,7 +463,7 @@ end
 %% ========================================================================
 %
 % EXTERNAL FUNCTION REQUIREMENTS:
-%   - plotOverLayed(image, labels, option) - Visualization helper function
+%   - plotImageAndMask(image, labels) - Visualization helper function
 %     Must be available in the specified path or MATLAB path
 %
 % NEURAL NETWORK REQUIREMENTS:
