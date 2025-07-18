@@ -96,5 +96,5 @@ You can see a detailed explaination of the code and our equipment in our YouTube
 
 ## LICENSE
 
-This project is licensed under the ****.  
+This project is licensed under the **BSD 2-Clause License**.  
 See the [LICENSE](LICENSE) file for more details.
