@@ -91,6 +91,9 @@ Inside the folder `AICompetition` in your local environment, you will find the f
 - `rxPluto.m`: performs synchronized IQ acquisition using two ADALM-Pluto SDRs and processes signals for AI-based classification and spectrogram visualization  
 
 
+## VIDEO:
+You can see a detailed explaination of the code and our equipment in our YouTube video at this link: https://youtu.be/Wmrsy2saCLQ 
+
 ## LICENSE:
 
 This project is licensed under the **MIT License**.  
