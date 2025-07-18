@@ -14,6 +14,22 @@ To access all the materials, follow these steps:
 
 ## HOW TO USE:
 
+### Pipeline
+
+To generate a synthethic dataset, launch `mainCreatingImages.mlx` from subfolder createDataset/ adjusting the parameters as preferred.
+Once a dataset is ready, `trainNetwork.mlx` can be launched from trainNetworkFolder/ , making sure that correct path and imagesize are set as parameters. The script includes:
+- partitioning of aforementioned dataset for training, testing and validation;
+- training of the chosen Neural Network with the given parameters
+- performance evaluation and save of the resulting CNN
+
+Use `mainEvaluationMetricsSynthetic.m` inside evaluationMetricsSynthetic/ to get a more precise evaluation of the CNN. A net has to be loaded as a variable.
+
+To test the net on real captures, launch `rxPluto.m` (with a loaded net variable) from visualizationHelpers/ . Keep in mind that this was tested with the setup from the Report, which included external PLUTO synchronization. Two PLUTOs with synchronized clock are required, as results can't be guaranteed with only two indipendent PLUTO devices.
+
+
+
+
+
 ### Folder Structure — `AICompetition`
 
 Inside the folder `AICompetition` in your local environment, you will find the following directories:
