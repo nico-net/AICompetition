@@ -12,7 +12,7 @@ To access all the materials, follow these steps:
   ```bash
   git clone https://github.com/nico-net/AICompetition
 
-## HOW TO USE:
+## HOW TO USE
 
 ### Pipeline
 
@@ -91,10 +91,10 @@ Inside the folder `AICompetition` in your local environment, you will find the f
 - `rxPluto.m`: performs synchronized IQ acquisition using two ADALM-Pluto SDRs and processes signals for AI-based classification and spectrogram visualization  
 
 
-## VIDEO:
+## VIDEO
 You can see a detailed explaination of the code and our equipment in our YouTube video at this link: https://youtu.be/Wmrsy2saCLQ 
 
-## LICENSE:
+## LICENSE
 
-This project is licensed under the **MIT License**.  
+This project is licensed under the ****.  
 See the [LICENSE](LICENSE) file for more details.
