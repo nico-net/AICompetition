@@ -26,7 +26,9 @@ Use `mainEvaluationMetricsSynthetic.m` inside evaluationMetricsSynthetic/ to get
 
 To test the net on real captures, launch `rxPluto.m` (with a loaded net variable) from visualizationHelpers/ . Keep in mind that this was tested with the setup from the Report, which included external PLUTO synchronization. Two PLUTOs with synchronized clock are required, as results can't be guaranteed with only two indipendent PLUTO devices.
 
+The following is a link to a Google Drive directory where one can find and download the dataset we used for our tests
 
+https://drive.google.com/drive/folders/1NW-zfu33dwwFuJRUL_rlkAoi--zqWsN5?usp=drive_link
 
 
 
