@@ -1,6 +1,6 @@
 function interfer = generateInterference(n, pMax)
 %GENERATEINTERFERENCE  Generate up to 2 random interferers in 2400–2480 MHz band
-%   interfer = generateInterference(n)
+%interfer = generateInterference(n)
 %     n         - number of interferers (0,1,2)
 %     interfer - complex baseband vector of length 1,600,000
 %     pMax      - max power of the signal of interest
@@ -62,7 +62,8 @@ function interfer = generateInterference(n, pMax)
                 modsig = sin(2*pi*f_mod.*t);        % simple sinusoidal modulator
                 instantaneous_phase = 2*pi*f_bb*t + (f_dev/fs)*cumsum(modsig);
                 interfer = interfer + amp * exp(1j*instantaneous_phase) * 0.1;
-                fprintf("Generating small FM-modulated tone\n")
+                fprintf("Generating small FM-modulated tone\n");
+                isFoff = true;
 
             case 3  % wideband noise burst
                 fOff = comm.PhaseFrequencyOffset();
