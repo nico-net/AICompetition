@@ -40,7 +40,7 @@ function [fineTunedProjectedNet, info] = projectionFunction( ...
     % ----- 3. Fine‑tune the projected network -----------------------------
     % WARNING: You’re training here, so cdsTest must contain *training* data.
     [fineTunedProjectedNet, info] = trainnet( ...
-        cdsTrain, netProjected, trainingOptions);
+        cdsTrain, netProjected, "crossentropy", trainingOptions);
 
     % ----- 4. Save the fine‑tuned network ---------------------------------
     save("dlnet_projected_retrained.mat", "fineTunedProjectedNet");
