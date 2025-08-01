@@ -63,7 +63,7 @@ function interfer = generateInterference(n, pMax)
                 instantaneous_phase = 2*pi*f_bb*t + (f_dev/fs)*cumsum(modsig);
                 interfer = interfer + amp * exp(1j*instantaneous_phase) * 0.1;
                 fprintf("Generating small FM-modulated tone\n");
-                isFoff = true;
+                isFoff = false;
 
             case 3  % wideband noise burst
                 fOff = comm.PhaseFrequencyOffset();
