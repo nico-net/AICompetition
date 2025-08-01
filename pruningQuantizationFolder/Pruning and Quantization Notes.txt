@@ -1,0 +1,5 @@
+NOTES ABOUT PRUNING AND QUANTIZATION
+
+As our plan was to implement the net on a RaspBerry Pi5, we started working on pruning, projection and quantization to thin the net. However, due to problems with time and logistics regarding Politecnico di Milano's calendar (i.e. graduations and exams), we were not able to complete the development. 
+
+We still uploaded the files as we worked quite a bit on them, however it's important to note that these WERE NOT ACTUALLY IMPLEMENTED NOR TESTED, so they may present bugs and are to be considered "Work In Progress".
