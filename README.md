@@ -31,6 +31,9 @@ The following is a link to a Google Drive directory where one can find and downl
 https://drive.google.com/drive/folders/1NW-zfu33dwwFuJRUL_rlkAoi--zqWsN5?usp=drive_link
 
 Here are the Networks we trained
+The subfolders refer to the size of the images used for training.
+_att_noisy_ refers to net trained with attention gates and a dataset composed of both clear and interference images.
+_fullnoise_ refers to nets trained with attention gates and with the dataset we uploaded.
 
 https://drive.google.com/drive/folders/1qrnkdLk9yRq-4vhVCIGekWyOpfaIZuEB?usp=sharing
 
