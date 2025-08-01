@@ -30,6 +30,10 @@ The following is a link to a Google Drive directory where one can find and downl
 
 https://drive.google.com/drive/folders/1NW-zfu33dwwFuJRUL_rlkAoi--zqWsN5?usp=drive_link
 
+Here are the Networks we trained
+
+https://drive.google.com/drive/folders/1qrnkdLk9yRq-4vhVCIGekWyOpfaIZuEB?usp=sharing
+
 
 
 ### Folder Structure — `AICompetition`
