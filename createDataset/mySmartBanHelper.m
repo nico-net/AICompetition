@@ -87,7 +87,11 @@ function [noisyWf, finWf] = mySmartBanHelper(Channel, centerFreq, txPower)
     beaconSignal = beaconchan(beaconSignal);
 
     % --- Start Simulation: Randomly place beacon ---
-    startPoint = floor(rand() * timeDuration * sampleRate);
+    maxSigLen = ceil((beaconLength + dataPacketLength + ackPacketLength)/bitRate * sampleRate ...
+                 + slotDuration*sampleRate);  % rough upper bound
+    maxStart = timeDuration * sampleRate - maxSigLen;
+    startPoint = randi([1, maxStart], 1);
+
 
     if (startPoint > timeDuration * sampleRate - length(beaconSignal) + 1)
         finWf = [zeros(startPoint - 1, 1); beaconSignal];
