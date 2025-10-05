@@ -1,0 +1,128 @@
+classdef WlanTx < Transmitter
+    %WLANTX Summary of this class goes here
+    %   Detailed explanation goes here
+
+    properties (Constant)
+        stdPacketDuration = 180e-6;
+        stdIdleTime = 20e-6;
+        stdSymbleRate = 20e6;
+        powerRange = [18 23];
+        dstRange = [5 60];
+    end
+
+    properties
+        wlanCfg = wlanHESUConfig;
+        packetDuration = WlanTx.stdPacketDuration;
+        idleTime = WlanTx.stdIdleTime;
+    end
+
+
+
+    methods
+        function obj = WlanTx(position, channel, centerFreq, txPower)
+            obj@Transmitter(position, channel, centerFreq, txPower)
+        end
+
+        function wf = getWaveform(obj, ~)
+
+            numPackets = obj.timeDuration / (obj.packetDuration + obj.idleTime);  % Total number of packets to generate
+            bits = Transmitter.randBits(obj.wlanCfg.getPSDULength);
+            wf = wlanWaveformGenerator(bits, obj.wlanCfg, ...
+                "NumPackets", numPackets, ...
+                "IdleTime", obj.idleTime);
+
+            W = Transmitter.dBm2W(obj.txPower);
+            wf = wf * sqrt(W/Transmitter.sigPwr(wf));
+
+            PL = obj.dB2W(obj.pathLoss);
+            
+            wf = wf * sqrt(1/PL);
+           
+            fs = 20e6;
+
+            switch obj.channel
+                case "Rician"
+                    pathDelays = [0, 50e-9, 120e-9, 200e-9];
+                    avgGains = [0, -3, -8, -17];
+                    Kfactor = [10, 0, 0, 0];   
+                    maxDoppler = 30; 
+                    directDoppler = [5, 0, 0, 0];
+                    directPhase   = [0, 0, 0, 0]; 
+                    
+
+                    chan = comm.RicianChannel( ...
+                        SampleRate = fs, ...
+                        PathDelays = pathDelays, ...
+                        AveragePathGains = avgGains, ...
+                        KFactor = Kfactor, ...
+                        MaximumDopplerShift = maxDoppler, ...
+                        DirectPathDopplerShift = directDoppler, ...
+                        NormalizePathGains = true, ...
+                        PathGainsOutputPort = true, ...
+                        DirectPathInitialPhase= directPhase, ... 
+                        Seed = 73 ); 
+
+                    wf = chan(wf);
+                case "Rayleigh"
+                    pathDelays = [0, 50e-9, 120e-9, 200e-9];
+                    avgGains   = [0, -3, -8, -17];
+                    maxDoppler = 30;
+
+                    chan = comm.RayleighChannel( ...
+                        SampleRate = fs, ...
+                        PathDelays = pathDelays, ...
+                        AveragePathGains = avgGains, ...
+                        MaximumDopplerShift = maxDoppler, ...
+                        NormalizePathGains = true, ...
+                        PathGainsOutputPort = true, ...
+                        Seed = 99 );
+                    
+                    wf = chan(wf);
+                otherwise
+                    % Dont do anything if it's AWGN channel
+            end
+
+            wf = resample(wf, 4, 1); % XDDDDD
+
+            fOff = comm.PhaseFrequencyOffset;
+            fOff.SampleRate = obj.targetSampleRate;
+            fOff.FrequencyOffset = obj.centerFreq - obj.ISMstart;  % Relative offset from ISM center
+            wf = fOff(wf);
+            release(fOff);
+        end
+
+        function PL = pathloss(obj)
+            % 3GPP TR 38.901
+            d = norm(obj.position);
+            if d <= 30
+                PLlos = 32.4 + 17.3*log10(d) + 20*log10(obj.centerFreq);
+                PLnlos = 38.3*log10(d) + 17.3 + 24.9*log10(obj.centerFreq);
+                if obj.channel == "RAYLEIGH"
+                    PL = max(PLlos, PLnlos);
+                elseif obj.channel == "RICIAN"
+                    PL = PLlos;
+                else 
+                    PL = Transmitter.pathloss(obj);
+                end
+            else 
+                % We are assuming to be always below the Break Point
+                % Distance
+                PL = 32.4 + 21*log10(d) + 20*log10(obj.centerFreq);
+            end
+
+
+        end
+
+    end
+
+        methods (Static)
+
+            function dst = randDst()
+                dst = WlanTx.dstRange(1) + (WlanTx.dstRange(2) - WlanTx.dstRange(2)) * rand();
+            end
+
+            function pwr = randPwr()
+                pwr = randi(WlanTx.powerRange);
+            end
+    end
+end

@@ -122,156 +122,156 @@ end
     
 function [payLoadLen, slotNum, phyMode, syncProfile, randomProfile] = myBtPacketFinder(packetType)
 
-switch packetType
-    case 'FHS' 
-        payLoadLen = 18;
-        slotNum = 1;  
-        phyMode = 'BR';
-        syncProfile = 'SCO';
-        randomProfile = 0.8;
-    case 'DM1'
-        payLoadLen = 17;
-        slotNum = 1; 
-        phyMode = 'BR';
-        syncProfile = 'SCO';
-        randomProfile = 0.5;
-    case 'DH1'
-        payLoadLen = 27;
-        slotNum = 1; 
-        phyMode = 'BR';
-        syncProfile = 'ACL';
-        randomProfile = 0.3; 
-    case 'DM3' 
-        payLoadLen = 121;
-        slotNum = 3;
-        phyMode = 'BR';
-        syncProfile = 'ACL';
-        randomProfile = 0.3;
-    case 'DH3'
-        payLoadLen = 183;
-        slotNum = 3;
-        phyMode = 'BR';
-        syncProfile = 'ACL';
-        randomProfile = 0.3;
-    case 'DM5'
-        payLoadLen = 224;
-        slotNum = 5;
-        phyMode = 'BR';
-        syncProfile = 'ACL';
-        randomProfile = 0.3;
-    case 'DH5'
-        payLoadLen = 339;
-        slotNum = 5;
-        phyMode = 'BR';
-        syncProfile = 'ACL';
-        randomProfile = 0.3;
-    case '2-DH1' 
-        payLoadLen = 54;
-        slotNum = 1; 
-        phyMode = 'EDR2M';
-        syncProfile = 'ACL';
-        randomProfile = 0.3;
-    case '2-DH3'
-        payLoadLen = 367;
-        slotNum = 3;
-        phyMode = 'EDR2M';
-        syncProfile = 'ACL';
-        randomProfile = 0.3;
-    case '2-DH5'
-        payLoadLen = 679;
-        slotNum = 5;
-        phyMode = 'EDR2M';
-        syncProfile = 'ACL';
-        randomProfile = 0.3;
-    case '3-DH1'
-        payLoadLen = 83;
-        slotNum = 1; 
-        phyMode = 'EDR3M';
-        syncProfile = 'ACL';
-        randomProfile = 0.5;
-    case '3-DH3'
-        payLoadLen = 552;
-        slotNum = 3;
-        phyMode = 'EDR3M';
-        syncProfile = 'ACL';
-        randomProfile = 0.3;
-    case '3-DH5'
-        payLoadLen = 1021;
-        slotNum = 5;
-        phyMode = 'EDR3M';
-        syncProfile = 'ACL';
-        randomProfile = 0.3;
-    case 'HV1'
-        payLoadLen = 10;
-        slotNum = 1; 
-        phyMode = 'BR';
-        syncProfile = 'SCO';
-        randomProfile = 0.1;
-    case 'HV2'
-        payLoadLen = 20;
-        slotNum = 1; 
-        phyMode = 'BR';
-        syncProfile = 'SCO';
-        randomProfile = 0.1;
-    case 'HV3'
-        payLoadLen = 30;
-        slotNum = 1; 
-        phyMode = 'BR';
-        syncProfile = 'SCO';
-        randomProfile = 0.1;
-    case 'DV'
-        payLoadLen = 19;
-        slotNum = 1; 
-        phyMode = 'BR';
-        syncProfile = 'SCO';
-        randomProfile = 0.5;
-    case 'EV3'
-        payLoadLen = 30;
-        slotNum = 1; 
-        phyMode = 'BR';
-        syncProfile = 'eSCO';
-        randomProfile = 0.1;
-    case 'EV4'
-        payLoadLen = 120;
-        slotNum = 3;
-        phyMode = 'BR';
-        syncProfile = 'eSCO';
-        randomProfile = 0.2;
-    case 'EV5'
-        payLoadLen = 180;
-        slotNum = 3;
-        phyMode = 'BR';
-        syncProfile = 'eSCO';
-        randomProfile = 0.2;
-    case '2-EV3'
-        payLoadLen = 60;
-        slotNum = 1; 
-        phyMode = 'EDR2M';
-        syncProfile = 'eSCO';
-        randomProfile = 0.1;
-    case '2-EV5'
-        payLoadLen = 360;
-        slotNum = 3;
-        phyMode = 'EDR2M';
-        syncProfile = 'eSCO';
-        randomProfile = 0.2;
-    case '3-EV3'
-        payLoadLen = 90;
-        slotNum = 1; 
-        phyMode = 'EDR3M';
-        syncProfile = 'eSCO';
-        randomProfile = 0.1;
-    case '3-EV5'
-        payLoadLen = 540;
-        slotNum = 3;
-        phyMode = 'EDR3M';
-        syncProfile = 'eSCO';
-        randomProfile = 0.2;
-    otherwise
-        payLoadLen = 18;
-        slotNum = 1;
-        phyMode = 'BR';
-        syncProfile = 'eSCO';
-        randomProfile = 0.8;
+    switch packetType
+        case 'FHS' 
+            payLoadLen = 18;
+            slotNum = 1;  
+            phyMode = 'BR';
+            syncProfile = 'SCO';
+            randomProfile = 0.8;
+        case 'DM1'
+            payLoadLen = 17;
+            slotNum = 1; 
+            phyMode = 'BR';
+            syncProfile = 'SCO';
+            randomProfile = 0.5;
+        case 'DH1'
+            payLoadLen = 27;
+            slotNum = 1; 
+            phyMode = 'BR';
+            syncProfile = 'ACL';
+            randomProfile = 0.3; 
+        case 'DM3' 
+            payLoadLen = 121;
+            slotNum = 3;
+            phyMode = 'BR';
+            syncProfile = 'ACL';
+            randomProfile = 0.3;
+        case 'DH3'
+            payLoadLen = 183;
+            slotNum = 3;
+            phyMode = 'BR';
+            syncProfile = 'ACL';
+            randomProfile = 0.3;
+        case 'DM5'
+            payLoadLen = 224;
+            slotNum = 5;
+            phyMode = 'BR';
+            syncProfile = 'ACL';
+            randomProfile = 0.3;
+        case 'DH5'
+            payLoadLen = 339;
+            slotNum = 5;
+            phyMode = 'BR';
+            syncProfile = 'ACL';
+            randomProfile = 0.3;
+        case '2-DH1' 
+            payLoadLen = 54;
+            slotNum = 1; 
+            phyMode = 'EDR2M';
+            syncProfile = 'ACL';
+            randomProfile = 0.3;
+        case '2-DH3'
+            payLoadLen = 367;
+            slotNum = 3;
+            phyMode = 'EDR2M';
+            syncProfile = 'ACL';
+            randomProfile = 0.3;
+        case '2-DH5'
+            payLoadLen = 679;
+            slotNum = 5;
+            phyMode = 'EDR2M';
+            syncProfile = 'ACL';
+            randomProfile = 0.3;
+        case '3-DH1'
+            payLoadLen = 83;
+            slotNum = 1; 
+            phyMode = 'EDR3M';
+            syncProfile = 'ACL';
+            randomProfile = 0.5;
+        case '3-DH3'
+            payLoadLen = 552;
+            slotNum = 3;
+            phyMode = 'EDR3M';
+            syncProfile = 'ACL';
+            randomProfile = 0.3;
+        case '3-DH5'
+            payLoadLen = 1021;
+            slotNum = 5;
+            phyMode = 'EDR3M';
+            syncProfile = 'ACL';
+            randomProfile = 0.3;
+        case 'HV1'
+            payLoadLen = 10;
+            slotNum = 1; 
+            phyMode = 'BR';
+            syncProfile = 'SCO';
+            randomProfile = 0.1;
+        case 'HV2'
+            payLoadLen = 20;
+            slotNum = 1; 
+            phyMode = 'BR';
+            syncProfile = 'SCO';
+            randomProfile = 0.1;
+        case 'HV3'
+            payLoadLen = 30;
+            slotNum = 1; 
+            phyMode = 'BR';
+            syncProfile = 'SCO';
+            randomProfile = 0.1;
+        case 'DV'
+            payLoadLen = 19;
+            slotNum = 1; 
+            phyMode = 'BR';
+            syncProfile = 'SCO';
+            randomProfile = 0.5;
+        case 'EV3'
+            payLoadLen = 30;
+            slotNum = 1; 
+            phyMode = 'BR';
+            syncProfile = 'eSCO';
+            randomProfile = 0.1;
+        case 'EV4'
+            payLoadLen = 120;
+            slotNum = 3;
+            phyMode = 'BR';
+            syncProfile = 'eSCO';
+            randomProfile = 0.2;
+        case 'EV5'
+            payLoadLen = 180;
+            slotNum = 3;
+            phyMode = 'BR';
+            syncProfile = 'eSCO';
+            randomProfile = 0.2;
+        case '2-EV3'
+            payLoadLen = 60;
+            slotNum = 1; 
+            phyMode = 'EDR2M';
+            syncProfile = 'eSCO';
+            randomProfile = 0.1;
+        case '2-EV5'
+            payLoadLen = 360;
+            slotNum = 3;
+            phyMode = 'EDR2M';
+            syncProfile = 'eSCO';
+            randomProfile = 0.2;
+        case '3-EV3'
+            payLoadLen = 90;
+            slotNum = 1; 
+            phyMode = 'EDR3M';
+            syncProfile = 'eSCO';
+            randomProfile = 0.1;
+        case '3-EV5'
+            payLoadLen = 540;
+            slotNum = 3;
+            phyMode = 'EDR3M';
+            syncProfile = 'eSCO';
+            randomProfile = 0.2;
+        otherwise
+            payLoadLen = 18;
+            slotNum = 1;
+            phyMode = 'BR';
+            syncProfile = 'eSCO';
+            randomProfile = 0.8;
     end
 end
