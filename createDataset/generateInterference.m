@@ -1,4 +1,4 @@
-function interfer = generateInterference(n, pMax)
+function interfer = generateInterference(n)
 %GENERATEINTERFERENCE  Generate up to 2 random interferers in 2400–2480 MHz band
 %interfer = generateInterference(n)
 %     n         - number of interferers (0,1,2)
@@ -13,12 +13,12 @@ function interfer = generateInterference(n, pMax)
     interfer = zeros(N,1);    % preallocate output
 
 
-    min_dB = -30;
-    max_dB = -10;
+    min_dB = -90;
+    max_dB = -70;
     dBr    = min_dB + (max_dB - min_dB)*rand(1);  % one per interferer
     linRatio = 10^(dBr/10);                        % linear ratio
-    Pinterf  = pMax * linRatio;                % target power per interferer
-    amp   = sqrt(Pinterf);
+    % Pinterf  = pMax * linRatio;                % target power per interferer
+    amp   = sqrt(linRatio);
 
     % for each interferer
     for k = 1:n

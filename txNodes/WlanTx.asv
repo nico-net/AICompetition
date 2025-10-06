@@ -14,6 +14,8 @@ classdef WlanTx < Transmitter
         wlanCfg = wlanHESUConfig;
         packetDuration = WlanTx.stdPacketDuration;
         idleTime = WlanTx.stdIdleTime;
+        centerFreqs = [2412e6, 2437e6, 2462e6];
+        availableFreqs;
     end
 
 
@@ -21,7 +23,6 @@ classdef WlanTx < Transmitter
     methods
         function obj = WlanTx(position, channel, centerFreq, txPower)
             obj@Transmitter(position, channel, centerFreq, txPower)
-            obj.centerFreqs = [2412e6, 2437e6, 2462e6];
             obj.availableFreqs = obj.centerFreqs;
         end
 
@@ -115,11 +116,8 @@ classdef WlanTx < Transmitter
 
         end
 
-        function obj = randParams(obj, vararg)
-            obj = randParams@Transmitter(obj, vararg);
-            i = randi([1 numel(obj.availableFreqs)]);
-            obj.centerFreq = obj.availableFreqs(i);
-            obj.availableFreqs(i) = [];
+        function obj = randParams(obj, randPwr)
+            obj = 
         end
 
     end

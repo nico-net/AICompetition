@@ -30,6 +30,8 @@ classdef SmartBanTx < Transmitter
             %SMARTBANTX Construct an instance of this class
             %   Detailed explanation goes here
             obj@Transmitter(position, channel, centerFreq, txPower);
+            obj.centerFreqs = (0:39)*2e6 + 2.402e9;
+            obj.availableFreqs = obj.centerFreqs;
         end
 
         function wf = getWaveform(obj,~)
@@ -187,6 +189,13 @@ classdef SmartBanTx < Transmitter
                 return;
             end
             PL = 40 + 10*n*log10(norm(obj.position));
+        end
+
+        function obj = randParams(obj, vararg)
+            obj = randParams@Transmitter(obj, vararg);
+            i = randi([1 numel(obj.availableFreqs)]);
+            obj.centerFreq = obj.availableFreqs(i);
+            obj.availableFreqs(i) = [];
         end
 
     end

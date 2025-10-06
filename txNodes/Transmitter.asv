@@ -53,12 +53,12 @@ classdef (Abstract) Transmitter
 
         end
 
-        function obj = randParams(obj, vararg)
+        function obj = randParams(obj, randPower)
             obj.channel = obj.randChan(); % Assign a random channel to the transmitter
-            if ~isempty(vararg(1)) && vararg(1)
+            if randPower
                 obj.txPower = obj.randPwr();
             end
-            obj = obj.setPos(Transmitter.findPos(obj.randDst));
+            obj.setPos(Transmitter.findPos(obj.))
         end
 
         function obj = resetFreqs(obj)

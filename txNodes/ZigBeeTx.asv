@@ -14,7 +14,9 @@ classdef ZigBeeTx < Transmitter
 
     properties
         zbCfg = lrwpanOQPSKConfig;
-        numPackets;
+        centerFreqs = (0:15) * 5e6 + 2.402e9;
+        availableFreqs;
+        numPackets
     end
 
     properties (Constant)
@@ -35,13 +37,11 @@ classdef ZigBeeTx < Transmitter
             end
             obj.zbCfg.SamplesPerChip = spc;
             obj.sampleRate = obj.zbCfg.SampleRate;
-            obj.centerFreqs = (0:15) * 5e6 + 2.402e9;
             obj.availableFreqs = obj.centerFreqs;
-            obj.numPackets = 1;
         end
 
         function wf = getWaveform(obj, vararg)
-            numPackets = obj.numPackets;
+            numPackets 
 
             fs = obj.sampleRate;
 
@@ -163,12 +163,11 @@ classdef ZigBeeTx < Transmitter
             PL = 40 + 10*n*log10(norm(obj.position));
         end
 
-        function obj = randParams(obj, vararg)
-            obj = randParams@Transmitter(obj, vararg);
+        function obj = randParams(obj, randPwr)
+            obj = randParams@Transmitter(obj, randPwr);
             i = randi([1 numel(obj.availableFreqs)]);
             obj.centerFreq = obj.availableFreqs(i);
             obj.availableFreqs(i) = [];
-            obj.numPackets = randi([1, 3]);
         end
             
     end

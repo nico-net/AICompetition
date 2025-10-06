@@ -36,7 +36,6 @@ classdef BluetoothTx < Transmitter
             end
             [obj.btCfg.PayloadLength, obj.currentSlotUse, obj.btCfg.Mode, ~, obj.randomProfile] = ...
             BluetoothTx.myBtPacketFinder(packetType);
-            obj.centerFreqs = 2402e6:1e6:2480e6;
             obj.availableFreqs = obj.centerFreqs;
         end
 
@@ -148,13 +147,11 @@ classdef BluetoothTx < Transmitter
         end
 
 
-        function obj = randParams(obj, vararg)
-            obj = randParams@Transmitter(obj, vararg);
-            packet = randi([1 numel(obj.packetTypes)]);
-            packet = obj.packetTypes(packet);
-            obj.btCfg.PacketType = packet;
-            [obj.btCfg.PayloadLength, obj.currentSlotUse, obj.btCfg.Mode, ~, obj.randomProfile] = ...
-            BluetoothTx.myBtPacketFinder(packet);
+        function obj = randParams(obj, randPwr, randPacket)
+            obj = randParams@Transmitter(obj, randPwr);
+            if (randPacket)
+                obj.btCfg.packetType = obj.packetTypes(randi([1 numel(obj.packetTypes)]));
+            end
             i = randi([1 numel(obj.availableFreqs)]);
             obj.centerFreq = obj.availableFreqs(i);
             obj.availableFreqs(i) = [];
