@@ -2,7 +2,7 @@ close all; clc;
 startPos = [0 0 0];
 startFreq = 2.402e9;
 
-numFrame = 10;
+numFrame = 20;
 
 btTx = BluetoothTx(startPos, "AWGN", startFreq, 4, "RANDOM");
 sbTx = SmartBanTx(startPos, "AWGN", startFreq, 4);
@@ -10,6 +10,11 @@ wlanTx = WlanTx(startPos, "AWGN", startFreq, 20);
 zbTx = ZigBeeTx(startPos, "AWGN", startFreq, 6, 4);
 
 txBatch = {wlanTx, zbTx, btTx, sbTx};
+
+
+useGPU = false;
+wantPlot = false;
+imageSize = {[256,256]};
 
 for index = 1:length(imageSize)
         imgSize = imageSize{index};
@@ -20,11 +25,6 @@ for index = 1:length(imageSize)
         end
 end
     
-
-useGPU = false;
-wantPlot = false;
-imageSize = {[256,256]};
-
 signalLabels = containers.Map(...
         {'WLAN', 'ZigBee', 'Bluetooth', 'SmartBAN'}, ...
         [16, 32, 64, 128]); 
@@ -64,7 +64,7 @@ for idxFrame = 1:numFrame
 
 
     for i = 1:numel(txBatch)
-        txBatch{i}.resetFreqs;
+        txBatch{i} = txBatch{i}.resetFreqs;
     end
 
 end

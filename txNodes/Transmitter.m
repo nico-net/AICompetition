@@ -33,6 +33,7 @@ classdef (Abstract) Transmitter
         
         function dispProperties(obj)
             disp('Transmitter Properties:');
+            disp(['Tx type: ', class(obj)]);
             disp(['Position: ', mat2str(obj.position)]);
             disp(['Channel: ', obj.channel]);
             disp(['Center Frequency: ', num2str(obj.centerFreq), ' Hz']);
