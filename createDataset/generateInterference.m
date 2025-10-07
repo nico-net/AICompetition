@@ -14,7 +14,7 @@ function interfer = generateInterference(n)
 
 
     min_dB = -90;
-    max_dB = -70;
+    max_dB = -60;
     dBr    = min_dB + (max_dB - min_dB)*rand(1);  % one per interferer
     linRatio = 10^(dBr/10);                        % linear ratio
     % Pinterf  = pMax * linRatio;                % target power per interferer
