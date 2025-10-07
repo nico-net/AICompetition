@@ -2,7 +2,7 @@ close all; clc;
 startPos = [0 0 0];
 startFreq = 2.402e9;
 
-numFrame = 20;
+numFrame = 20000;
 
 btTx = BluetoothTx(startPos, "AWGN", startFreq, 4, "RANDOM");
 sbTx = SmartBanTx(startPos, "AWGN", startFreq, 4);
@@ -60,7 +60,6 @@ for idxFrame = 1:numFrame
     wfFin = mySignalMixerInterf(waveformsClean, 20e-3, 1e-8);
     [~, spectrogramTot] = createSpectrogram(wfFin, sr, imageSize, useGPU, wantPlot);
     overlapLabelledImages(data_tot, idxFrame, dirName, labels, spectrogramTot, signalLabels);
-    pause(5);
 
 
     for i = 1:numel(txBatch)

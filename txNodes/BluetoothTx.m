@@ -15,7 +15,7 @@ classdef BluetoothTx < Transmitter
         "EV3", "EV4", "EV5", "2-EV3", "2-EV5", "3-EV3", "3-EV5"];
         symbolRate = 1e6;
         powerRange = [0 8];
-        dstRange = [0.1 20];
+        dstRange = [1 20];
     end
 
     methods

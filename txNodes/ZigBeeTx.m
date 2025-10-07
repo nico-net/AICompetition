@@ -22,7 +22,7 @@ classdef ZigBeeTx < Transmitter
         maxTxPower = 10;
         packetTimeDuration = 4.2565e-3; % seconds
         powerRange = [-3 8];
-        dstRange = [0.1 20];
+        dstRange = [1 20];
 
     end
 

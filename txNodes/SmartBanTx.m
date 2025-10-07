@@ -22,7 +22,7 @@ classdef SmartBanTx < Transmitter
         missProb = 0.1;
         powerRange = [0 12];
         sensorPwrRange = [-6 4];         %dBm
-        dstRange = [0.1 20]
+        dstRange = [1 20]
     end
 
     methods
