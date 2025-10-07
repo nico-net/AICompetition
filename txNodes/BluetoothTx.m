@@ -22,6 +22,7 @@ classdef BluetoothTx < Transmitter
         function obj = BluetoothTx(position, channel, centerFreq, txPower, packetType)
             obj@Transmitter(position, channel, centerFreq, txPower)
             obj.btCfg.SamplesPerSymbol = 20;
+            obj.label = "Bluetooth";
             obj.sampleRate = obj.symbolRate * obj.btCfg.SamplesPerSymbol;
             if (exist("packetType", 'var'))
                 if (packetType == "RANDOM")

@@ -30,6 +30,7 @@ classdef SmartBanTx < Transmitter
             %SMARTBANTX Construct an instance of this class
             %   Detailed explanation goes here
             obj@Transmitter(position, channel, centerFreq, txPower);
+            obj.label = "SmartBAN";
             obj.centerFreqs = (0:39)*2e6 + 2.402e9;
             obj.availableFreqs = obj.centerFreqs;
         end

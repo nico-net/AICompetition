@@ -23,6 +23,8 @@ classdef WlanTx < Transmitter
             obj@Transmitter(position, channel, centerFreq, txPower)
             obj.centerFreqs = [2412e6, 2437e6, 2462e6];
             obj.availableFreqs = obj.centerFreqs;
+            obj.label = "WLAN";
+
         end
 
         function wf = getWaveform(obj, ~)

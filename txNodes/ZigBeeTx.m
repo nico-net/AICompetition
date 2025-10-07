@@ -38,6 +38,7 @@ classdef ZigBeeTx < Transmitter
             obj.centerFreqs = (0:15) * 5e6 + 2.402e9;
             obj.availableFreqs = obj.centerFreqs;
             obj.numPackets = 1;
+            obj.label = "ZigBee";
         end
 
         function wf = getWaveform(obj, vararg)

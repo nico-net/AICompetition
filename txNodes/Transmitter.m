@@ -10,6 +10,7 @@ classdef (Abstract) Transmitter
         centerFreq;
         centerFreqs;
         availableFreqs;
+        label;
     end
 
     properties (Constant)
@@ -28,6 +29,18 @@ classdef (Abstract) Transmitter
             obj.channel = channel;
             obj.centerFreq = centerFreq;
             obj.txPower = txPower;
+        end
+        
+        function dispProperties(obj)
+            disp('Transmitter Properties:');
+            disp(['Position: ', mat2str(obj.position)]);
+            disp(['Channel: ', obj.channel]);
+            disp(['Center Frequency: ', num2str(obj.centerFreq), ' Hz']);
+            disp(['Transmit Power: ', num2str(obj.txPower), ' dBm']);
+        end
+
+        function label = returnLabel(obj)
+            label = obj.label;
         end
 
         function obj = setPos(obj,position)
